@@ -1,0 +1,4 @@
+uint32 encoder_id
+---
+bool success
+string message

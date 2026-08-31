@@ -1,0 +1,13 @@
+int32 joystick_x
+int32 joystick_y
+int32 trigger_press_percentage
+uint32 handle_receive_count
+uint8 key1_click_type
+uint8 key2_click_type
+uint32 key1_receive_count
+uint32 key2_receive_count
+uint32 calibration_receive_count
+uint8 calibration_x
+uint8 calibration_y
+uint8 calibration_trigger
+uint8 calibration_all

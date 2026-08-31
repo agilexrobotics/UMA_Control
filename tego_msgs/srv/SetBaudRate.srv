@@ -1,0 +1,10 @@
+uint32 encoder_id
+uint8 BAUDRATE_500K = 0
+uint8 BAUDRATE_1000K = 1
+uint8 BAUDRATE_250K = 2
+uint8 BAUDRATE_125K = 3
+uint8 BAUDRATE_100K = 4
+uint8 baudrate
+---
+bool success
+string message

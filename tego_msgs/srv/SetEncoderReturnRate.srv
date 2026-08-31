@@ -1,0 +1,5 @@
+uint32 encoder_id
+uint16 encoder_return_rate
+---
+bool success
+string message

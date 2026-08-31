@@ -1,0 +1,13 @@
+tego_ros_node:
+  ros__parameters:
+    trigger_action: false
+    init_action: false
+    # add_angle: false
+    base_reverse: false
+    imu_reverse: false
+    show_imu_data: false
+    use_piper_modle: false
+    use_pose_dt_zoom: false
+    zoom_factor: 1.0
+    use_trigger_pose: false
+    gripper_length: 0.0
