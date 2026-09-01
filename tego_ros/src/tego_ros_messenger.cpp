@@ -10,6 +10,9 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <stdexcept>
+#include <sstream>
+#include <set>
 
 using namespace std::placeholders;
 
@@ -19,7 +22,7 @@ namespace tegocore
 TegoRosMessenger::TegoRosMessenger(TegoBase *tego, const std::string& node_name):
     rclcpp::Node(node_name),
     tego_(tego),
-    arm_zero_joint_vec(vector<double>(20, 0.0)),
+    arm_home_state_vec(),
     imu_zero_rpy_vec(vector<double>(3, 0.0))
 {
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
@@ -100,7 +103,6 @@ void TegoRosMessenger::SetupSubscription()
 
 void TegoRosMessenger::declareParameters()
 {
-    // 只读取一次的参数   (实测无法在ros2中实现)
     GetRosParameter("check_get", check_get_);
     GetRosParameter("wait_feedback", wait_feedback_);
     GetRosParameter("publish_sim_joint", publish_sim_joint_);
@@ -120,25 +122,34 @@ void TegoRosMessenger::declareParameters()
     GetRosParameter("base_to_imu_roll", base_to_imu_roll);
     GetRosParameter("base_to_imu_pitch", base_to_imu_pitch);
     GetRosParameter("base_to_imu_yaw", base_to_imu_yaw);
-    GetRosParameter("arm_zero_joint", arm_zero_joint);
+    GetRosParameter("arm_home_state", arm_home_state);
     GetRosParameter("imu_zero_rpy", imu_zero_rpy);
     GetRosParameter("is_nero", is_nero);
     GetRosParameter("nero_gripper_topic_name", nero_gripper_topic_name);
 
-    // 长期存在的配置参数
     GetRosParameter("add_angle", add_angle, true);
     GetRosParameter("base_reverse", base_reverse, true);
     GetRosParameter("imu_reverse", imu_reverse, true);
     GetRosParameter("show_imu_data", show_imu_data, true);
-    GetRosParameter("use_piper_modle", use_piper_modle, true);
+    GetRosParameter("use_piper_mode", use_piper_mode, true);
+    GetRosParameter("handle_seg0", handle_seg0, true);
+    GetRosParameter("handle_seg1", handle_seg1, true);
+    GetRosParameter("handle_seg2", handle_seg2, true);
+    GetRosParameter("handle_seg3", handle_seg3, true);
     GetRosParameter("use_pose_dt_zoom", use_pose_dt_zoom, true);
     GetRosParameter("zoom_factor", zoom_factor, true);
     GetRosParameter("use_trigger_pose", use_trigger_pose, true);
     GetRosParameter("gripper_length", gripper_length, true);
-    GetRosParameter("trigger_action", is_trigger_action, true);
-    GetRosParameter("init_action", is_init_action, true);
+    bool trigger_action_parameter = false;
+    GetRosParameter("trigger_action", trigger_action_parameter, true);
+    is_trigger_action.store(trigger_action_parameter);
+    trigger_action_tmp.store(trigger_action_parameter);
+    bool init_action_parameter = false;
+    GetRosParameter("init_action", init_action_parameter, true);
+    is_init_action.store(init_action_parameter);
+    init_action_tmp.store(init_action_parameter);
 
-    RCLCPP_INFO(this->get_logger(), "Version: [ros2] 0.10.1");
+    RCLCPP_INFO(this->get_logger(), "Version: [ros2] 1.0.0");
     RCLCPP_INFO(this->get_logger(), "check_get: %s", Bool2String[check_get_].c_str());
     RCLCPP_INFO(this->get_logger(), "wait_feedback: %s", Bool2String[wait_feedback_].c_str());
     RCLCPP_INFO(this->get_logger(), "publish_sim_joint: %s", Bool2String[publish_sim_joint_].c_str());
@@ -154,21 +165,29 @@ void TegoRosMessenger::declareParameters()
     RCLCPP_INFO(this->get_logger(), "base_reverse: %s", Bool2String[base_reverse].c_str());
     RCLCPP_INFO(this->get_logger(), "imu_reverse: %s", Bool2String[imu_reverse].c_str());
     RCLCPP_INFO(this->get_logger(), "show_imu_data: %s", Bool2String[show_imu_data].c_str());
-    RCLCPP_INFO(this->get_logger(), "use_piper_modle: %s", Bool2String[use_piper_modle].c_str());
+    RCLCPP_INFO(this->get_logger(), "use_piper_mode: %s", Bool2String[use_piper_mode].c_str());
     RCLCPP_INFO(this->get_logger(), "use_pose_dt_zoom: %s", Bool2String[use_pose_dt_zoom].c_str());
     RCLCPP_INFO(this->get_logger(), "zoom_factor: %lf", zoom_factor);
     RCLCPP_INFO(this->get_logger(), "base_to_imu: (%-.2lf, %-.2lf, %-.2lf)",
                 base_to_imu_roll, base_to_imu_pitch, base_to_imu_yaw);
     RCLCPP_INFO(this->get_logger(), "use_trigger_pose: %s", Bool2String[use_trigger_pose].c_str());
-    RCLCPP_INFO(this->get_logger(), "arm_zero_joint: %s", arm_zero_joint.c_str());
+    RCLCPP_INFO(this->get_logger(), "arm_home_state: %s", arm_home_state.c_str());
     RCLCPP_INFO(this->get_logger(), "imu_zero_rpy: %s", imu_zero_rpy.c_str());
     RCLCPP_INFO(this->get_logger(), "gripper_length: %-.2lf", gripper_length);
     RCLCPP_INFO(this->get_logger(), "is_nero: %s", Bool2String[is_nero].c_str());
     base_to_imu_roll = base_to_imu_roll / 180.0 * M_PI;
     base_to_imu_pitch = base_to_imu_pitch / 180.0 * M_PI;
     base_to_imu_yaw = base_to_imu_yaw / 180.0 * M_PI;
-    SplitRosParams(arm_zero_joint, arm_zero_joint_vec);
-    SplitRosParams(imu_zero_rpy, imu_zero_rpy_vec);
+    try
+    {
+        SplitRosParams(arm_home_state, arm_home_state_vec);
+        SplitRosParams(imu_zero_rpy, imu_zero_rpy_vec);
+    }
+    catch (const std::exception &e)
+    {
+        RCLCPP_FATAL(this->get_logger(), "Invalid arm_home_state/imu_zero_rpy parameter: %s", e.what());
+        throw;
+    }
 
     imu2baseRPYQ = GetRPYQuaterniond(base_to_imu_roll, base_to_imu_pitch, base_to_imu_yaw).inverse();
     imu_diff_quatd = GetRPYQuaterniond(0, 0, 0);
@@ -191,7 +210,7 @@ TegoRosMessenger::dynamicParametersCallback(const std::vector<rclcpp::Parameter>
     result.reason = "success";
 
     RCLCPP_INFO_ONCE(this->get_logger(), "get dynamic");
-    is_reconfig_run = true;
+    is_reconfig_run.store(true);
     // get dynamic parameters
     for (const auto &param : parameters)
     {
@@ -204,21 +223,29 @@ TegoRosMessenger::dynamicParametersCallback(const std::vector<rclcpp::Parameter>
     }
 
     // check trigger_action
-    if (is_trigger_action != trigger_action_tmp)
+    const bool requested_trigger_action = trigger_action_tmp.load();
+    const bool current_trigger_action = is_trigger_action.load();
+    if (current_trigger_action != requested_trigger_action)
     {
-        is_trigger_action = trigger_action_tmp;
-        if (is_trigger_action != teleop_enable)
+        is_trigger_action.store(requested_trigger_action);
+        bool current_teleop_enable;
         {
-        // if (teleop_piper_cli_->wait_for_service(std::chrono::seconds(1))) {
-            last_call_teleop_time = this->now();
+            std::lock_guard<std::mutex> lock(teleop_state_mutex);
+            current_teleop_enable = teleop_enable.load();
+            if (requested_trigger_action != current_teleop_enable)
+            {
+                last_call_teleop_time = this->now();
+            }
+        }
+        if (requested_trigger_action != current_teleop_enable)
+        {
             RCLCPP_INFO(this->get_logger(), "call teleop server.");
             auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
             teleop_piper_cli_->async_send_request(req);
-        // }
         }
-        makeThread([this]
+        makeThread([this, requested_trigger_action]
         {
-            if (!is_trigger_action)
+            if (!requested_trigger_action)
             {
                 SetHandleMotor(true);
                 RosDurationSleep(0.15);
@@ -237,80 +264,171 @@ TegoRosMessenger::dynamicParametersCallback(const std::vector<rclcpp::Parameter>
         });
     }
 
-    // check init_action
-    if (!is_init_action && init_action_tmp)
+    const bool init_action_requested = init_action_tmp.load();
+    if (init_action_requested && teleop_enable.load())
     {
-        makeThread([this]() mutable
+        init_action_tmp.store(false);
+        result.successful = false;
+        result.reason = "cannot start home action while teleop is enabled";
+        is_reconfig_run.store(false);
+        return result;
+    }
+    bool expected_not_running = false;
+    if (init_action_requested &&
+        is_init_action.compare_exchange_strong(expected_not_running, true))
+    {
+        sensor_msgs::msg::JointState arm_joint;
         {
-            is_init_action = true;
+            std::lock_guard<std::mutex> lock(arm_joint_mutex);
+            arm_joint = last_arm_joint;
+        }
+        const bool get_arm_joint = !CheckTimeout(arm_joint.header.stamp, 3.0);
+
+        makeThread([this, arm_joint = std::move(arm_joint), get_arm_joint]() mutable
+        {
             RCLCPP_INFO(this->get_logger(), "start init action thread");
-            auto arm_joint = last_arm_joint;
-            bool get_arm_joint = !CheckTimeout(last_arm_joint.header.stamp, 3.0);
-            SetHandleMotor(true);
-            double init_time = 0.6;
-            if (get_arm_joint)
+            const auto finish_init_action = [this]()
             {
-                int init_rate = 50;
-                size_t init_steps = static_cast<size_t>(init_rate * init_time);
-                rclcpp::Rate loop_rate(init_rate);
-
-                std::vector<double> angle_dt_vec(arm_joint.position.size(), 0.0);
-                for (size_t i = 0; i < arm_joint.position.size(); i++)
-                {
-                    angle_dt_vec.at(i) = (arm_joint.position.at(i) - arm_zero_joint_vec.at(i)) / init_steps;
-                }
-
-                std::cout << "[dt]: " << std::flush;
-                for (const auto &it : angle_dt_vec)
-                {
-                    std::cout << it << ", " << std::flush;
-                }
-                std::cout << std::endl;
-
-                for (size_t i = 0; i < init_steps; ++i)
-                {
-                    for (size_t j = 0; j < arm_joint.position.size(); ++j)
-                    {
-                        arm_joint.position[j] -= angle_dt_vec[j];
-                    }
-                    remote_joint_publisher_->publish(arm_joint);
-                    loop_rate.sleep();
-                }
-            }
-
-            // std::fill(arm_joint.position.begin(), arm_joint.position.end(), 0.0);
-            arm_joint.position = arm_zero_joint_vec;
-            remote_joint_publisher_->publish(arm_joint);
-
-            // std::cout << "[joint]: " << std::flush;
-            // for (const auto &it : arm_joint.position)
-            // {
-            //     std::cout << it << ", " << std::flush;
-            // }
-            // std::cout << std::endl;
+                is_init_action.store(false);
+                init_action_tmp.store(false);
+                this->set_parameter(rclcpp::Parameter("init_action", false));
+                RCLCPP_INFO(this->get_logger(), "stop init action thread");
+            };
 
             if (!get_arm_joint)
             {
-                RosDurationSleep(init_time);
+                RCLCPP_ERROR(
+                    this->get_logger(),
+                    "no fresh arm joint feedback; aborting home action");
+                finish_init_action();
+                return;
+            }
+            if (arm_joint.name.empty() ||
+                arm_joint.name.size() != arm_joint.position.size() ||
+                std::set<std::string>(arm_joint.name.begin(), arm_joint.name.end()).size() !=
+                    arm_joint.name.size())
+            {
+                RCLCPP_ERROR(
+                    this->get_logger(),
+                    "invalid feedback JointState name/position layout; aborting home action");
+                finish_init_action();
+                return;
+            }
+            for (const auto position : arm_joint.position)
+            {
+                if (!std::isfinite(position))
+                {
+                    RCLCPP_ERROR(
+                        this->get_logger(),
+                        "feedback JointState contains non-finite position; aborting home action");
+                    finish_init_action();
+                    return;
+                }
+            }
+            if (arm_home_state_vec.size() != arm_joint.position.size())
+            {
+                RCLCPP_ERROR(
+                    this->get_logger(),
+                    "arm_home_state length %zu does not match feedback joint length %zu; aborting home action",
+                    arm_home_state_vec.size(), arm_joint.position.size());
+                finish_init_action();
+                return;
+            }
+            if (teleop_enable.load())
+            {
+                RCLCPP_WARN(
+                    this->get_logger(),
+                    "teleop enabled; canceling home action");
+                finish_init_action();
+                return;
+            }
+
+            SetHandleMotor(true);
+            double init_time = 0.6;
+            int init_rate = 50;
+            size_t init_steps = static_cast<size_t>(init_rate * init_time);
+            rclcpp::Rate loop_rate(init_rate);
+
+            std::vector<double> angle_dt_vec(arm_joint.position.size(), 0.0);
+            for (size_t i = 0; i < arm_joint.position.size(); i++)
+            {
+                angle_dt_vec.at(i) = (arm_joint.position.at(i) - arm_home_state_vec.at(i)) / init_steps;
+            }
+
+            std::cout << "[dt]: " << std::flush;
+            for (const auto &it : angle_dt_vec)
+            {
+                std::cout << it << ", " << std::flush;
+            }
+            std::cout << std::endl;
+
+            for (size_t i = 0; i < init_steps; ++i)
+            {
+                if (teleop_enable.load())
+                {
+                    RCLCPP_WARN(
+                        this->get_logger(),
+                        "teleop enabled; canceling home action");
+                    SetHandleMotor(false);
+                    finish_init_action();
+                    return;
+                }
+                for (size_t j = 0; j < arm_joint.position.size(); ++j)
+                {
+                    arm_joint.position[j] -= angle_dt_vec[j];
+                }
+                bool teleop_interrupted = false;
+                {
+                    std::lock_guard<std::mutex> lock(remote_joint_publish_mutex);
+                    if (teleop_enable.load())
+                    {
+                        teleop_interrupted = true;
+                    }
+                    else
+                    {
+                        remote_joint_publisher_->publish(arm_joint);
+                    }
+                }
+                if (teleop_interrupted)
+                {
+                    RCLCPP_WARN(
+                        this->get_logger(),
+                        "teleop enabled; canceling home action");
+                    SetHandleMotor(false);
+                    finish_init_action();
+                    return;
+                }
+                loop_rate.sleep();
+            }
+
+            if (teleop_enable.load())
+            {
+                RCLCPP_WARN(
+                    this->get_logger(),
+                    "teleop enabled; canceling home action");
+                SetHandleMotor(false);
+                finish_init_action();
+                return;
+            }
+            arm_joint.position = arm_home_state_vec;
+            {
+                std::lock_guard<std::mutex> lock(remote_joint_publish_mutex);
+                if (teleop_enable.load())
+                {
+                    RCLCPP_WARN(
+                        this->get_logger(),
+                        "teleop enabled; canceling home action");
+                    SetHandleMotor(false);
+                    finish_init_action();
+                    return;
+                }
+                remote_joint_publisher_->publish(arm_joint);
             }
             SetHandleMotor(false);
-
-            std::lock_guard<std::mutex> lock(config_cli_mutex);
-            is_init_action = false;
-            this->set_parameter(rclcpp::Parameter("init_action", false));
-            RCLCPP_INFO(this->get_logger(), "stop init action thread");
+            finish_init_action();
         });
     }
-    else if (is_init_action && !init_action_tmp)
-    {
-        // check
-        makeThread([this]
-        {
-            std::lock_guard<std::mutex> lock(config_cli_mutex);
-            this->set_parameter(rclcpp::Parameter("init_action", true));
-        });
-    }
-    is_reconfig_run = false;
+    is_reconfig_run.store(false);
 
     return result;
 }
@@ -386,22 +504,28 @@ void TegoRosMessenger::RemoteJointCallback(const sensor_msgs::msg::JointState::S
     {
         last_remote_joint.position[6] = GetGripperWidth();
     }
-    if (teleop_enable)
     {
-        remote_joint_publisher_->publish(last_remote_joint);
+        std::lock_guard<std::mutex> lock(remote_joint_publish_mutex);
+        if (teleop_enable.load())
+        {
+            remote_joint_publisher_->publish(last_remote_joint);
+        }
     }
 }
 
 void TegoRosMessenger::ArmJointCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
 {
+    std::lock_guard<std::mutex> lock(arm_joint_mutex);
     last_arm_joint = *msg;
     last_arm_joint.header.stamp = this->now();
 }
 
 void TegoRosMessenger::TeleopEnableCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
+    std::lock_guard<std::mutex> state_lock(teleop_state_mutex);
+    std::lock_guard<std::mutex> publish_lock(remote_joint_publish_mutex);
     last_get_teleop_enable_time = this->now();
-    teleop_enable = msg->data;
+    teleop_enable.store(msg->data);
 }
 
 void TegoRosMessenger::ImuCallback(const sensor_msgs::msg::Imu::SharedPtr msg)
@@ -498,9 +622,9 @@ void TegoRosMessenger::UpdateAndPublishPose()
 {
     double world_to_joint_base_yaw = base_reverse ? M_PI : 0;
     int angle_reverse_k = angle_reverse ? -1 : 1;
-    double angle0 = -(angle_list[1] - angle0_base);// + arm_zero_joint_vec.at(0);
-    double angle1 = angle_reverse_k * (angle_list[2] - angle1_base);// + arm_zero_joint_vec.at(1);
-    double angle2 = -angle_reverse_k * (angle_list[3] - angle2_base) + add_angle * angle_value;// + arm_zero_joint_vec.at(2);
+    double angle0 = -(angle_list[1] - angle0_base);// + arm_home_state_vec.at(0);
+    double angle1 = angle_reverse_k * (angle_list[2] - angle1_base);// + arm_home_state_vec.at(1);
+    double angle2 = -angle_reverse_k * (angle_list[3] - angle2_base) + add_angle * angle_value;// + arm_home_state_vec.at(2);
     double gripper_pos = GetGripperWidth()/2;
 
     auto cur_imu_diff_quatd = imu_zero_quatd * imu_diff_quatd;
@@ -518,69 +642,18 @@ void TegoRosMessenger::UpdateAndPublishPose()
     Eigen::Matrix4d gripper_left_matrix(ToTransform(gripper_length, gripper_pos));
     Eigen::Matrix4d gripper_right_matrix(ToTransform(gripper_length, -gripper_pos, 0, M_PI));
 
-    if (use_piper_modle)
-    {
-        // world -> joint_base
-        // joint_base -> joint0 [yaw] z: 0.123
-        // joint0 -> joint1 [-pitch]-0.1359  roll: 1.5707963  yaw: 3.1415926
-        // joint1 -> joint2 [yaw]-1.7939  x: 0.28503
-        // joint2 -> joint3 x: -0.022 y: -0.25075 roll: 1.5707963
-        joint_base_to_joint0_matrix = ToTransform(0, 0, 0.123, 0, 0, angle0);
-        joint0_to_joint1_matrix = ToTransform(0, 0, 0, 1.5707963, -angle1-0.1359, 3.1415926);
-        joint1_to_joint2_matrix = ToTransform(0.28503, 0, 0, 0, 0, angle2-1.7939);
-        joint2_to_joint3_matrix = ToTransform(-0.022, -0.25075, 0, 1.5707963, 0, 0);
-    }
-    else
-    {
-        double cur_zoom_factor = use_pose_dt_zoom ? 1.0 : zoom_factor;
-        /* [v4]
-         - world -> joint_base
-         - joint_base -> joint0 [yaw] z: 0.07575
-         - joint0 -> joint1 [-pitch]  roll: 1.5707963  yaw: 3.1415926
-         - joint1 -> joint2 [yaw]-1.5707963  x: 0.220
-         - joint2 -> joint3 x:-0.04804 y: -0.19115 z: 0.05487*k roll: 1.5707963     // x:135.41-75.75=59.66?
-        */
-        joint_base_to_joint0_matrix = ToTransform(0, 0, 0.0534, 0, 0, angle0);
-        joint0_to_joint1_matrix = ToTransform(0, 0, 0, 1.5707963, -angle1, 3.1415926);
-        joint1_to_joint2_matrix = ToTransform(0.220, 0, 0, 0, 0, angle2-1.5707963, cur_zoom_factor);
-        joint2_to_joint3_matrix = ToTransform(-0.04804, -0.19115, 0.05487*angle_reverse_k, 1.5707963, 0, 0, cur_zoom_factor);
-
-        /* [v3]
-         - world -> joint_base
-         - joint_base -> joint0 [yaw] z: 0.0534
-         - joint0 -> joint1 [-pitch]  roll: 1.5707963  yaw: 3.1415926
-         - joint1 -> joint2 [yaw]-1.5707963  x: 0.200
-         - joint2 -> joint3 x:0.00608 y: -0.174704 z: 0.05262*k roll: 1.5707963
-        */
-        //joint_base_to_joint0_matrix = ToTransform(0, 0, 0.0534, 0, 0, angle0);
-        //joint0_to_joint1_matrix = ToTransform(0, 0, 0, 1.5707963, -angle1, 3.1415926);
-        //joint1_to_joint2_matrix = ToTransform(0.200, 0, 0, 0, 0, angle2-1.5707963, cur_zoom_factor);
-        //joint2_to_joint3_matrix = ToTransform(0.00608, -0.174704, 0.05262*angle_reverse_k, 1.5707963, 0, 0, cur_zoom_factor);
-
-        /* [v2]
-         - world -> joint_base
-         - joint_base -> joint0 [yaw] z: 0.0534
-         - joint0 -> joint1 [-pitch]  roll: 1.5707963  yaw: 3.1415926
-         - joint1 -> joint2 [yaw]-1.5707963  x: 0.225   y: 0.0035
-         - joint2 -> joint3 x:-0.0125 y: -0.200 roll: 1.5707963
-        */
-        //joint_base_to_joint0_matrix = ToTransform(0, 0, 0.0534, 0, 0, angle0);
-        //joint0_to_joint1_matrix = ToTransform(0, 0, 0, 1.5707963, -angle1, 3.1415926);
-        //joint1_to_joint2_matrix = ToTransform(0.225, 0.0035, 0, 0, 0, angle2-1.5707963, cur_zoom_factor);
-        //joint2_to_joint3_matrix = ToTransform(-0.0125, -0.200, 0, 1.5707963, 0, 0, cur_zoom_factor);
-
-        /* [v1]
-         - world -> joint_base
-         - joint_base -> joint0 [yaw] z: 0.0534
-         - joint0 -> joint1 [-pitch]  roll: 1.5707963  yaw: 3.1415926
-         - joint1 -> joint2 [yaw]-1.5707963  x: 0.200   y: 0.004
-         - joint2 -> joint3 x:-0.0119 y: -0.17388 roll: 1.5707963
-        */
-        //joint_base_to_joint0_matrix = ToTransform(0, 0, 0.0534, 0, 0, angle0);
-        //joint0_to_joint1_matrix = ToTransform(0, 0, 0, 1.5707963, -angle1, 3.1415926);
-        //joint1_to_joint2_matrix = ToTransform(0.200, 0.004, 0, 0, 0, angle2-1.5707963, cur_zoom_factor);
-        //joint2_to_joint3_matrix = ToTransform(-0.0119, -0.17388, 0, 1.5707963, 0, 0, cur_zoom_factor);
-    }
+    // 手柄运动学DH参数常量
+    double seg_zoom = use_piper_mode ? 1.0 : (use_pose_dt_zoom ? 1.0 : zoom_factor);
+    joint_base_to_joint0_matrix = ToTransform(handle_seg0.at(0), handle_seg0.at(1), handle_seg0.at(2),
+                                              handle_seg0.at(3), handle_seg0.at(4), angle0 + handle_seg0.at(5));
+    joint0_to_joint1_matrix = ToTransform(handle_seg1.at(0), handle_seg1.at(1), handle_seg1.at(2),
+                                          handle_seg1.at(3), handle_seg1.at(4) - angle1, handle_seg1.at(5));
+    joint1_to_joint2_matrix = ToTransform(handle_seg2.at(0), handle_seg2.at(1), handle_seg2.at(2),
+                                          handle_seg2.at(3), handle_seg2.at(4), angle2 + handle_seg2.at(5),
+                                          seg_zoom);
+    joint2_to_joint3_matrix = ToTransform(handle_seg3.at(0), handle_seg3.at(1), handle_seg3.at(2) * angle_reverse_k,
+                                          handle_seg3.at(3), handle_seg3.at(4), handle_seg3.at(5),
+                                          seg_zoom);
 
     Eigen::Matrix4d joint3_to_joint4_matrix(ToTransform(-0.00424, 0, 0.03474));
     Eigen::Matrix4d joint4_to_joint5_matrix(ToTransform());
@@ -633,7 +706,7 @@ void TegoRosMessenger::PublishRemotePose()
     if (firstInit)
         return;
 
-    double cur_zoom_factor = !use_piper_modle && use_pose_dt_zoom ? zoom_factor : 1.0;
+    double cur_zoom_factor = !use_piper_mode && use_pose_dt_zoom ? zoom_factor : 1.0;
     Eigen::Matrix4d pose_matrix(remote_base_pose_matrix);
     Eigen::Matrix4d dt_matrix = remote_base_pose_matrix.inverse() * cur_pose_matrix;
     dt_matrix.block<3, 1>(0, 3) *= cur_zoom_factor;
@@ -681,27 +754,37 @@ void TegoRosMessenger::AnalyzeKeyEventAction(uint8_t key_id, uint8_t click_type)
 
     if (click_type == CLICK_DOUBLE)
     {
-        if (teleop_enable)
+        if (teleop_enable.load())
         {
             RosDurationSleep(double_press_timeout);
         }
         makeThread([this]
         {
-            RCLCPP_INFO(this->get_logger(), "[side key trigger] -> %s", Bool2String[!is_trigger_action].c_str());
-            this->set_parameter(rclcpp::Parameter("trigger_action", !is_trigger_action));
+            const bool next_trigger_action = !is_trigger_action.load();
+            RCLCPP_INFO(this->get_logger(), "[side key trigger] -> %s", Bool2String[next_trigger_action].c_str());
+            this->set_parameter(rclcpp::Parameter("trigger_action", next_trigger_action));
         });
         return;
     }
 
     if (click_type == CLICK_LONG)
     {
-        if (!teleop_enable)
+        if (!teleop_enable.load())
         {
             RCLCPP_INFO(this->get_logger(), "[side key init]");
             makeThread([this]
             {
                 RosDurationSleep(double_press_timeout);
-                this->set_parameter(rclcpp::Parameter("init_action", true));
+                if (!teleop_enable.load())
+                {
+                    this->set_parameter(rclcpp::Parameter("init_action", true));
+                }
+                else
+                {
+                    RCLCPP_INFO(
+                        this->get_logger(),
+                        "[side key init] canceled because teleop is enabled");
+                }
             });
         }
         else
@@ -719,36 +802,46 @@ bool TegoRosMessenger::CheckTimeout(rclcpp::Time time, double timeout)
 
 bool TegoRosMessenger::CheckTriggerStatus(bool cur_trigger_status)
 {
-    return cur_trigger_status == teleop_enable;
+    return cur_trigger_status == teleop_enable.load();
 }
 
 void TegoRosMessenger::SplitRosParams(const std::string& data, std::vector<double>& vec)
 {
-    size_t max_count = vec.size();
-    if (max_count == 0)
-        return;
+    vec.clear();
+    std::vector<double> parsed_values;
+    if (data.empty())
+        throw std::invalid_argument("parameter must not be empty");
 
     std::stringstream ss(data);
     std::string token;
-    size_t index = 0;
-    while (index < max_count && std::getline(ss, token, ','))
+    while (std::getline(ss, token, ','))
     {
         size_t start = token.find_first_not_of(" \t\r\n");
         size_t end = token.find_last_not_of(" \t\r\n");
         if (start == std::string::npos)
-        {
-            continue;
-        }
+            throw std::invalid_argument("parameter contains an empty value");
+
         std::string trimmed = token.substr(start, end - start + 1);
+        size_t consumed = 0;
+        double value = 0.0;
         try
         {
-            vec[index] = std::stod(trimmed);
-            ++index;
-        } catch (const std::exception&)
-        {
-            continue;
+            value = std::stod(trimmed, &consumed);
         }
+        catch (const std::exception&)
+        {
+            throw std::invalid_argument("parameter contains a non-numeric value: " + trimmed);
+        }
+        if (consumed != trimmed.size())
+            throw std::invalid_argument("parameter contains a non-numeric value: " + trimmed);
+        if (!std::isfinite(value))
+            throw std::invalid_argument("parameter must contain only finite values: " + trimmed);
+        parsed_values.push_back(value);
     }
+
+    if (parsed_values.empty() || data.back() == ',')
+        throw std::invalid_argument("parameter must contain at least one value");
+    vec.swap(parsed_values);
 }
 
 void TegoRosMessenger::SetHandleMotor(bool run)
@@ -773,10 +866,20 @@ void TegoRosMessenger::ResetTeleopEnableThread()
     rclcpp::Rate loop_rate(20);
     while (rclcpp::ok() && !stopping_threads_.load())
     {
-        if (teleop_enable && CheckTimeout(last_get_teleop_enable_time, timeout))
         {
-            RCLCPP_INFO(this->get_logger(), "can't get teleop_enable status");
-            teleop_enable = false;
+            std::lock_guard<std::mutex> state_lock(teleop_state_mutex);
+            if (teleop_enable.load() && CheckTimeout(last_get_teleop_enable_time, timeout))
+            {
+                std::lock_guard<std::mutex> publish_lock(remote_joint_publish_mutex);
+                // Re-check after acquiring the publish lock so a concurrent
+                // teleop-enable callback cannot be overwritten by a stale timeout.
+                if (teleop_enable.load() &&
+                    CheckTimeout(last_get_teleop_enable_time, timeout))
+                {
+                    RCLCPP_INFO(this->get_logger(), "can't get teleop_enable status");
+                    teleop_enable.store(false);
+                }
+            }
         }
         loop_rate.sleep();
     }
@@ -787,10 +890,20 @@ void TegoRosMessenger::ResetTriggerActionThread()
     rclcpp::Rate loop_rate(20);
     while (rclcpp::ok() && !stopping_threads_.load())
     {
-        if (!is_reconfig_run && CheckTimeout(last_call_teleop_time, 0.5) && is_trigger_action != teleop_enable)
+        bool should_reset = false;
+        bool current_trigger_action = false;
         {
-            RCLCPP_INFO(this->get_logger(), "[reset trigger] -> %s", Bool2String[!is_trigger_action].c_str());
-            this->set_parameter(rclcpp::Parameter("trigger_action", !is_trigger_action));
+            std::lock_guard<std::mutex> lock(teleop_state_mutex);
+            current_trigger_action = is_trigger_action.load();
+            should_reset = !is_reconfig_run.load() &&
+                           CheckTimeout(last_call_teleop_time, 0.5) &&
+                           current_trigger_action != teleop_enable.load();
+        }
+        if (should_reset)
+        {
+            const bool next_trigger_action = !current_trigger_action;
+            RCLCPP_INFO(this->get_logger(), "[reset trigger] -> %s", Bool2String[next_trigger_action].c_str());
+            this->set_parameter(rclcpp::Parameter("trigger_action", next_trigger_action));
         }
         loop_rate.sleep();
     }
@@ -885,9 +998,6 @@ void TegoRosMessenger::PublishStateToROS()
         AnalyzeKeyEventAction(state.key_event_state.key_id, state.key_event_state.click_type);
     }
     // imu
-    // Some TEGO firmware versions publish IMU components with different
-    // periods and/or omit one component. Do not suppress the complete IMU
-    // message while waiting for a particular pair of components.
     bool imu_init = state.imu_linear_acceleration_get != 0 ||
                     state.imu_angular_velocity_get != 0 ||
                     state.imu_orientation_get != 0;

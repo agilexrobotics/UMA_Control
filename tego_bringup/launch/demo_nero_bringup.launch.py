@@ -1,11 +1,16 @@
-"""Bring up the Nero example arms, teleoperation, and tego control bridge."""
+"""Bring up the Nero example arms, teleoperation, and tego control bridges.
+
+One entry for both backends: ``backend:=cpp/python``(默认 cpp)。
+"""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+
+from tego_bringup.bridge_launch import bridge_wrapper_name
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -16,11 +21,17 @@ def generate_launch_description() -> LaunchDescription:
     log_level = LaunchConfiguration("log_level")
     start_arm = LaunchConfiguration("start_arm")
     start_teleop = LaunchConfiguration("start_teleop")
+    profile_path = LaunchConfiguration("profile_path")
+    backend = LaunchConfiguration("backend")
 
     arm_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
-                [FindPackageShare("agx_arm_ctrl"), "launch", "start_double_nero.launch.py"]
+                [
+                    FindPackageShare("agx_arm_ctrl"),
+                    "launch",
+                    "start_double_arm.launch.py",
+                ]
             )
         ),
         launch_arguments={
@@ -33,42 +44,69 @@ def generate_launch_description() -> LaunchDescription:
     teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
-                [FindPackageShare("agx_arm_ctrl"), "launch", "teleop_double_nero.launch.py"]
+                [
+                    FindPackageShare("agx_arm_ctrl"),
+                    "launch",
+                    "teleop_double_arm.launch.py",
+                ]
             )
         ),
+        launch_arguments={"profile_path": profile_path}.items(),
         condition=IfCondition(start_teleop),
     )
-    bridge_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [FindPackageShare("tego_bringup"), "launch", "double_nero_remote.launch.py"]
-            )
-        ),
-        launch_arguments={
-            "left_port_name": left_port_name,
-            "right_port_name": right_port_name,
-            "gripper_width_min": LaunchConfiguration("gripper_width_min"),
-            "gripper_width_max": LaunchConfiguration("gripper_width_max"),
-            "pub_rate": LaunchConfiguration("pub_rate"),
-            "log_level": log_level,
-        }.items(),
-    )
 
+    def build_bridges(context):
+        backend_val = backend.perform(context)
+        bridges = []
+        for side, port_name in (("left", left_port_name), ("right", right_port_name)):
+            wrapper = bridge_wrapper_name("nero", side, backend_val)
+            bridges.append(
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution(
+                            [FindPackageShare("tego_bringup"), "launch", wrapper]
+                        )
+                    ),
+                    launch_arguments={
+                        "port_name": port_name,
+                        "gripper_width_min": LaunchConfiguration("gripper_width_min"),
+                        "gripper_width_max": LaunchConfiguration("gripper_width_max"),
+                        "pub_rate": LaunchConfiguration("pub_rate"),
+                        "log_level": log_level,
+                        "profile_path": profile_path,
+                    }.items(),
+                )
+            )
+        return bridges
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("left_arm_port", default_value="left_nero"),
-            DeclareLaunchArgument("right_arm_port", default_value="right_nero"),
+            DeclareLaunchArgument("left_arm_port", default_value="left_arm"),
+            DeclareLaunchArgument("right_arm_port", default_value="right_arm"),
             DeclareLaunchArgument("left_port_name", default_value="left_tego"),
             DeclareLaunchArgument("right_port_name", default_value="right_tego"),
+            DeclareLaunchArgument(
+                "backend", default_value="cpp", choices=["cpp", "python"],
+                description="Handle bridge backend.",
+            ),
             DeclareLaunchArgument("gripper_width_min", default_value="0.00"),
             DeclareLaunchArgument("gripper_width_max", default_value="0.07"),
             DeclareLaunchArgument("pub_rate", default_value="200.0"),
             DeclareLaunchArgument("log_level", default_value="info"),
-            DeclareLaunchArgument("start_arm", default_value="true", choices=["true", "false"]),
-            DeclareLaunchArgument("start_teleop", default_value="true", choices=["true", "false"]),
+            DeclareLaunchArgument(
+                "profile_path",
+                default_value=PathJoinSubstitution(
+                    [FindPackageShare("tego_bringup"), "config", "nero_profile.yaml"]
+                ),
+            ),
+            DeclareLaunchArgument(
+                "start_arm", default_value="true", choices=["true", "false"]
+            ),
+            DeclareLaunchArgument(
+                "start_teleop", default_value="true", choices=["true", "false"]
+            ),
             arm_launch,
             teleop_launch,
-            bridge_launch,
+            OpaqueFunction(function=build_bridges),
         ]
     )

@@ -95,7 +95,7 @@ class AgxArmRosNode(Node):
         self.declare_parameter("arm_type", "piper")
         self.declare_parameter("auto_enable", True)
         self.declare_parameter("speed_percent", 100)
-        self.declare_parameter("pub_rate", 200)
+        self.declare_parameter("pub_rate", 200.0)
         self.declare_parameter("enable_timeout", 5.0)
         self.declare_parameter("installation_pos", "horizontal")
         self.declare_parameter("payload", "empty")
@@ -142,9 +142,13 @@ class AgxArmRosNode(Node):
         self.agx_arm.set_tcp_offset(self.tcp_offset)
         self.is_mit_mode = False
         self.is_switch_seamlessly = True
-        if self.is_piper:
+        # 安装朝向/负载是所有机型的通用能力:驱动支持就下发。
+        # piper 驱动已支持;nero 驱动当前未开放该方法,跳过不影响。
+        if hasattr(self.agx_arm, "set_installation_pos"):
             self.agx_arm.set_installation_pos(self.installation_pos)
+        if hasattr(self.agx_arm, "set_payload"):
             self.agx_arm.set_payload(self.payload)
+        if self.is_piper:
             self.firmware = self.agx_arm.get_firmware()
             if self.firmware:
                 current_version = self._parse_firmware_version(self.firmware['software_version'])

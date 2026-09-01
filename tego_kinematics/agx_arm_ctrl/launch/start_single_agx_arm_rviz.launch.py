@@ -1,175 +1,121 @@
+"""Start one AGX arm controller together with the shared RViz description."""
+
 from launch import LaunchDescription
-from launch_ros.actions import Node
-from launch.actions import (
-    DeclareLaunchArgument,
-    IncludeLaunchDescription,
-)
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-import os
-from ament_index_python.packages import get_package_share_directory
-
-os.environ["RCUTILS_COLORIZED_OUTPUT"] = "1"
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 
 
-def generate_launch_description():
+ARM_TYPES = ["nero", "piper", "piper_h", "piper_l", "piper_x"]
+EFFECTOR_TYPES = ["none", "agx_gripper", "revo2"]
+INSTALLATION_POSITIONS = ["horizontal", "left", "right"]
+PAYLOAD_TYPES = ["empty", "half", "full"]
+BOOL_CHOICES = ["true", "false"]
 
-    # arg
-    log_level_arg = DeclareLaunchArgument(
-        "log_level",
-        default_value="info",
-        description="Logging level (debug, info, warn, error, fatal).",
-    )
 
-    can_port_arg = DeclareLaunchArgument(
-        "can_port",
-        default_value="can0",
-        description="CAN port to be used by the AGX Arm node.",
-    )
+def _arg(name, default, description, choices=None):
+    kwargs = {"default_value": default, "description": description}
+    if choices is not None:
+        kwargs["choices"] = choices
+    return DeclareLaunchArgument(name, **kwargs)
 
-    arm_type_arg = DeclareLaunchArgument(
-        "arm_type",
-        default_value="nero",
-        choices=["nero", "piper", "piper_h", "piper_l", "piper_x"],
-        description="Robotic arm type (e.g. nero, piper, piper_h, piper_l, piper_x).",
-    )
 
-    effector_type_arg = DeclareLaunchArgument(
-        "effector_type",
-        default_value="none",
-        choices=["none", "agx_gripper", "revo2"],
-        description="End effector type (e.g. agx_gripper, revo2).",
-    )
+def generate_launch_description() -> LaunchDescription:
+    arm_type = LaunchConfiguration("arm_type")
+    effector_type = LaunchConfiguration("effector_type")
+    tcp_offset = LaunchConfiguration("tcp_offset")
 
-    revo2_type_arg = DeclareLaunchArgument(
-        "revo2_type",
-        default_value="left",
-        choices=["left", "right"],
-        description="Revo2 end effector type (e.g. left, right).",
-    )
-
-    auto_enable_arg = DeclareLaunchArgument(
-        "auto_enable",
-        default_value="true",
-        choices=["true", "false"],
-        description="Automatically enable the AGX Arm node.",
-    )
-
-    installation_pos_arg = DeclareLaunchArgument(
-        "installation_pos",
-        default_value="horizontal",
-        choices=["horizontal", "left", "right"],
-        description="Installation position of the arm (e.g. horizontal, left, right).",
-    )
-
-    speed_percent_arg = DeclareLaunchArgument(
-        "speed_percent",
-        default_value="30",
-        description="Movement speed as a percentage of maximum speed.",
-    )
-
-    pub_rate_arg = DeclareLaunchArgument(
-        "pub_rate",
-        default_value="200",
-        description="Publishing rate for the AGX Arm node.",
-    )
-
-    enable_timeout_arg = DeclareLaunchArgument(
-        "enable_timeout",
-        default_value="5.0",
-        description="Timeout in seconds for arm enable/disable operations.",
-    )
-
-    payload_arg = DeclareLaunchArgument(
-        "payload",
-        default_value="empty",
-        choices=["empty", "half", "full"],
-        description="Payload type (e.g. empty, half, full).",
-    )
-
-    follow_arg = DeclareLaunchArgument(
-        "follow",
-        default_value="true",
-        choices=["true", "false"],
-        description="Follow real arm state.",
-    )
-
-    control_arg = DeclareLaunchArgument(
-        "control",
-        default_value="false",
-        choices=["true", "false"],
-        description="Whether to publish control topics from the RViz-side joint state publisher.",
-    )
-
-    tcp_offset_arg = DeclareLaunchArgument(
-        "tcp_offset",
-        default_value="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
-        description="TCP offset in x, y, z, roll, pitch, yaw in meters/radians.",
-    )
-
-    # description:统一使用 tego_description/launch/display.launch.py
-    description_launch = IncludeLaunchDescription(
+    description = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("tego_description"),
-                "launch",
-                "display.launch.py",
+            PathJoinSubstitution(
+                [FindPackageShare("tego_description"), "launch", "display.launch.py"]
             )
         ),
         launch_arguments={
-            "arm_type": LaunchConfiguration("arm_type"),
-            "effector_type": LaunchConfiguration("effector_type"),
+            "arm_type": arm_type,
+            "custom_model": LaunchConfiguration("custom_model"),
+            "effector_type": effector_type,
             "revo2_type": LaunchConfiguration("revo2_type"),
             "pub_rate": LaunchConfiguration("pub_rate"),
+            "gui": LaunchConfiguration("gui"),
+            "rvizconfig": LaunchConfiguration("rvizconfig"),
             "follow": LaunchConfiguration("follow"),
-            "tcp_offset": LaunchConfiguration("tcp_offset"),
             "control": LaunchConfiguration("control"),
+            "tcp_offset": tcp_offset,
         }.items(),
     )
 
-    # agx_arm
-    agx_arm_launch = IncludeLaunchDescription(
+    driver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("agx_arm_ctrl"),
-                "launch",
-                "start_single_agx_arm.launch.py",
+            PathJoinSubstitution(
+                [
+                    FindPackageShare("agx_arm_ctrl"),
+                    "launch",
+                    "start_single_agx_arm.launch.py",
+                ]
             )
         ),
         launch_arguments={
             "can_port": LaunchConfiguration("can_port"),
-            "pub_rate": LaunchConfiguration("pub_rate"),
+            "arm_type": arm_type,
+            "effector_type": effector_type,
             "auto_enable": LaunchConfiguration("auto_enable"),
-            "arm_type": LaunchConfiguration("arm_type"),
             "speed_percent": LaunchConfiguration("speed_percent"),
+            "pub_rate": LaunchConfiguration("pub_rate"),
             "enable_timeout": LaunchConfiguration("enable_timeout"),
             "installation_pos": LaunchConfiguration("installation_pos"),
-            "effector_type": LaunchConfiguration("effector_type"),
             "payload": LaunchConfiguration("payload"),
-            "tcp_offset": LaunchConfiguration("tcp_offset"),
+            "tcp_offset": tcp_offset,
+            "publish_gripper_joint": LaunchConfiguration("publish_gripper_joint"),
+            "node_name": LaunchConfiguration("node_name"),
+            "topics_end": LaunchConfiguration("topics_end"),
+            "log_level": LaunchConfiguration("log_level"),
         }.items(),
     )
 
     return LaunchDescription(
         [
-            # arguments
-            log_level_arg,
-            can_port_arg,
-            arm_type_arg,
-            effector_type_arg,
-            revo2_type_arg,
-            auto_enable_arg,
-            installation_pos_arg,
-            speed_percent_arg,
-            pub_rate_arg,
-            enable_timeout_arg,
-            payload_arg,
-            tcp_offset_arg,
-            follow_arg,
-            control_arg,
-            # description
-            description_launch,
-            # agx_arm
-            agx_arm_launch,
+            _arg("can_port", "can0", "SocketCAN interface connected to the arm."),
+            _arg("arm_type", "nero", "Arm model.", ARM_TYPES),
+            _arg("effector_type", "none", "End-effector implementation.", EFFECTOR_TYPES),
+            _arg(
+                "auto_enable",
+                "true",
+                "Automatically enable the arm.",
+                BOOL_CHOICES,
+            ),
+            _arg(
+                "installation_pos",
+                "horizontal",
+                "Arm installation orientation.",
+                INSTALLATION_POSITIONS,
+            ),
+            _arg("speed_percent", "100", "Motion speed percentage."),
+            _arg("pub_rate", "200.0", "Feedback publication rate in Hz."),
+            _arg("enable_timeout", "5.0", "Enable/disable timeout in seconds."),
+            _arg("payload", "empty", "Payload preset.", PAYLOAD_TYPES),
+            _arg(
+                "tcp_offset",
+                "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+                "TCP offset [x, y, z, roll, pitch, yaw] in m/rad.",
+            ),
+            _arg(
+                "publish_gripper_joint",
+                "true",
+                "Publish aggregate gripper joint feedback.",
+                BOOL_CHOICES,
+            ),
+            _arg("node_name", "agx_arm_ctrl_single_node", "Unique driver node name."),
+            _arg("topics_end", "", "Suffix for driver topics and services."),
+            _arg("log_level", "info", "ROS logging level."),
+            _arg("custom_model", "", "Optional custom URDF/Xacro path."),
+            _arg("revo2_type", "left", "Revo2 hand side.", ["left", "right"]),
+            _arg("gui", "true", "Enable joint_state_publisher_gui.", BOOL_CHOICES),
+            _arg("rvizconfig", "", "RViz config path; empty uses package default."),
+            _arg("follow", "true", "Follow real arm feedback.", BOOL_CHOICES),
+            _arg("control", "false", "Enable RViz joint-state control.", BOOL_CHOICES),
+            description,
+            driver,
         ]
     )

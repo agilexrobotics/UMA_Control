@@ -5,13 +5,13 @@ package_name = 'agx_arm_ctrl'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='1.0.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('lib', package_name), glob('agx_arm_ctrl/*.py')),
     ],
     install_requires=[
@@ -21,6 +21,7 @@ setup(
         'casadi',
         'pin',
         'meshcat',
+        'PyYAML',
     ],
     zip_safe=True,
     maintainer='root',
@@ -30,7 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'agx_arm_ctrl_single = agx_arm_ctrl.agx_arm_ctrl_single_node:main',
-            'teleop_single_nero = agx_arm_ctrl.teleop_single_nero_node:main',
+            'teleop_single_arm = agx_arm_ctrl.teleop_single_arm_node:main',
         ],
     },
 )

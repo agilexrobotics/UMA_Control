@@ -78,9 +78,24 @@ def resolve_model_path(context, *args, **kwargs):
     custom_model = LaunchConfiguration('custom_model').perform(context)
     follow = LaunchConfiguration('follow').perform(context)
     control = LaunchConfiguration('control').perform(context)
-    tcp_offset = ast.literal_eval(
-        LaunchConfiguration('tcp_offset').perform(context)
-    )
+    try:
+        tcp_offset = ast.literal_eval(
+            LaunchConfiguration('tcp_offset').perform(context)
+        )
+    except (SyntaxError, ValueError) as exc:
+        raise ValueError(
+            'tcp_offset must be a six-element list: [x, y, z, roll, pitch, yaw]'
+        ) from exc
+    if not isinstance(tcp_offset, (list, tuple)) or len(tcp_offset) != 6:
+        raise ValueError(
+            'tcp_offset must be a six-element list: [x, y, z, roll, pitch, yaw]'
+        )
+    try:
+        tcp_offset = [float(value) for value in tcp_offset]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            'tcp_offset must contain only numeric values'
+        ) from exc
     pkg_path = get_package_share_path('tego_description')
 
     if custom_model:
@@ -94,6 +109,8 @@ def resolve_model_path(context, *args, **kwargs):
         Command(['xacro ', model_path]), value_type=str
     )
 
+    joint_state_topic = '/feedback/joint_states' if follow == 'true' else '/control/joint_states'
+
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -101,7 +118,7 @@ def resolve_model_path(context, *args, **kwargs):
         remappings=[
             (
                 '/joint_states',
-                f'{"feedback" if follow == "true" else "control"}/joint_states',
+                joint_state_topic,
             )
         ],
     )
@@ -122,12 +139,16 @@ def resolve_model_path(context, *args, **kwargs):
         remappings=[('/joint_states', '/control/joint_states')]
     )
 
+    rviz_config = LaunchConfiguration('rvizconfig').perform(context)
+    if not rviz_config:
+        rviz_config = str(get_package_share_path('tego_description') / 'rviz/display.rviz')
+
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
         output='screen',
-        arguments=['-d', LaunchConfiguration('rvizconfig')],
+        arguments=['-d', rviz_config],
     )
 
     nodes = [
@@ -194,12 +215,12 @@ def generate_launch_description():
     )
     pub_rate_arg = DeclareLaunchArgument(
         'pub_rate',
-        default_value='200',
+        default_value='200.0',
         description='Publishing rate for the AGX Arm node.'
     )
     gui_arg = DeclareLaunchArgument(
         name='gui',
-        default_value='true',
+        default_value='false',
         choices=['true', 'false'],
         description='Flag to enable joint_state_publisher_gui',
     )
@@ -210,13 +231,13 @@ def generate_launch_description():
     )
     follow_arg = DeclareLaunchArgument(
         name='follow',
-        default_value='false',
+        default_value='true',
         choices=['true', 'false'],
         description='Flag to enable follow mode',
     )
     control_arg = DeclareLaunchArgument(
         name='control',
-        default_value='true',
+        default_value='false',
         choices=['true', 'false'],
         description='Flag to enable publishing control topics.',
     )

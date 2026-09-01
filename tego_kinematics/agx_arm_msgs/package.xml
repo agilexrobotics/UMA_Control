@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>agx_arm_msgs</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>ROS messages for robotic arm control and feedback.</description>
   <maintainer email="agilex@agilex.ai">AgileX Robotics</maintainer>
   <license>Apache-2.0</license>

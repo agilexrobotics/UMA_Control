@@ -90,7 +90,7 @@ private:
     std::string remote_joint_topic_out = "joint_out";
     std::string remote_service_name = "teleop_piper_status";
     std::string node_name = "tego_node";
-    string arm_zero_joint = "0, 0, 0, 0, 0, 0, 0.1";
+    string arm_home_state;
     string imu_zero_rpy = "0, 0, 0";
     string nero_gripper_topic_name = "gripper_states";
 
@@ -100,14 +100,18 @@ private:
     bool base_reverse = false;
     bool imu_reverse = true;
     bool show_imu_data = true;
-    bool use_piper_modle = true;
+    bool use_piper_mode = true;
     bool is_nero = false;
     double zoom_factor = 1.0;
+    std::vector<double> handle_seg0{0.0, 0.0, 0.123, 0.0, 0.0, 0.0};
+    std::vector<double> handle_seg1{0.0, 0.0, 0.0, 1.5707963, -0.1359, 3.1415926};
+    std::vector<double> handle_seg2{0.28503, 0.0, 0.0, 0.0, 0.0, -1.7939};
+    std::vector<double> handle_seg3{-0.022, -0.25075, 0.0, 1.5707963, 0.0, 0.0};
     double base_to_imu_roll = 0.0;
     double base_to_imu_pitch = 0.0;
     double base_to_imu_yaw = 0.0;
     double world_to_base_y = 0.0;
-    vector<double> arm_zero_joint_vec, imu_zero_rpy_vec;
+    vector<double> arm_home_state_vec, imu_zero_rpy_vec;
 
     // Publishers
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_publisher_;
@@ -162,11 +166,15 @@ private:
     double angle_list[7] = {0};
     int trigger_press_percentage = 0;
 
-    bool is_trigger_action = false, trigger_action_tmp;
-    bool is_init_action = false, init_action_tmp;
-    bool teleop_enable = false;
+    std::atomic_bool is_trigger_action{false};
+    std::atomic_bool trigger_action_tmp{false};
+    std::atomic_bool is_init_action{false};
+    std::atomic_bool init_action_tmp{false};
+    std::atomic_bool teleop_enable{false};
     rclcpp::Time last_get_teleop_enable_time, last_call_teleop_time;
     sensor_msgs::msg::JointState last_arm_joint, last_remote_joint;
+    std::mutex arm_joint_mutex;
+    std::mutex remote_joint_publish_mutex;
 
     bool use_pose_dt_zoom = true;
     Eigen::Matrix4d remote_base_pose_matrix, cur_pose_matrix;
@@ -179,7 +187,8 @@ private:
     int press_action_num = 0;
 
     std::mutex config_cli_mutex, update_mutex;
-    bool is_reconfig_run = false;
+    std::mutex teleop_state_mutex;
+    std::atomic_bool is_reconfig_run{false};
 
     // Threads started by callbacks must not outlive this node.
     std::mutex thread_mutex_;
@@ -228,8 +237,20 @@ private:
         {"show_imu_data", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
             self.show_imu_data = p.as_bool();
         }},
-        {"use_piper_modle", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
-            self.use_piper_modle = p.as_bool();
+        {"use_piper_mode", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
+            self.use_piper_mode = p.as_bool();
+        }},
+        {"handle_seg0", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
+            self.handle_seg0 = p.as_double_array();
+        }},
+        {"handle_seg1", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
+            self.handle_seg1 = p.as_double_array();
+        }},
+        {"handle_seg2", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
+            self.handle_seg2 = p.as_double_array();
+        }},
+        {"handle_seg3", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
+            self.handle_seg3 = p.as_double_array();
         }},
         {"use_pose_dt_zoom", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
             self.use_pose_dt_zoom = p.as_bool();
@@ -244,10 +265,10 @@ private:
             self.gripper_length = p.as_double();
         }},
         {"trigger_action", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
-            self.trigger_action_tmp = p.as_bool();
+            self.trigger_action_tmp.store(p.as_bool());
         }},
         {"init_action", [](TegoRosMessenger& self, const rclcpp::Parameter& p) {
-            self.init_action_tmp = p.as_bool();
+            self.init_action_tmp.store(p.as_bool());
         }}
     };
 

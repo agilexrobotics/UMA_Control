@@ -26,8 +26,13 @@ target_link_libraries(tego_ros_node tego_sdk::tego_sdk Eigen3::Eigen)
 ament_target_dependencies(tego_ros_node rclcpp rcl_interfaces std_msgs sensor_msgs geometry_msgs tego_msgs tf2 tf2_ros tf2_geometry_msgs std_srvs)
 
 
-install(TARGETS 
+install(TARGETS
   tego_ros_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/tego_ros_py_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

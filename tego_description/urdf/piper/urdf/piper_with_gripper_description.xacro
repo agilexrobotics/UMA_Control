@@ -2,7 +2,7 @@
      Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="piper">
-<xacro:include filename="$(find agx_arm_description)/agx_arm_urdf/piper/urdf/piper_description.urdf"/>
+<xacro:include filename="$(find tego_description)/urdf/piper/urdf/piper_description.urdf"/>
     <link name="flange_link">
         <inertial>
             <origin xyz="1.151691e-03 0.782428e-03 4.798051e-03" rpy="0 0 0"/>
@@ -12,13 +12,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/dae/flange.dae"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/dae/flange.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/flange.stl"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/flange.stl"/>
             </geometry>
         </collision>
     </link>
@@ -36,13 +36,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/dae/gripper_base.dae"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/dae/gripper_base.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/gripper_base.stl"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/gripper_base.stl"/>
             </geometry>
         </collision>
     </link>
@@ -68,13 +68,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/dae/gripper_link1.dae"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/dae/gripper_link1.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/gripper_link1.stl"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/gripper_link1.stl"/>
             </geometry>
         </collision>
     </link>
@@ -95,13 +95,13 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/dae/gripper_link2.dae"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/dae/gripper_link2.dae"/>
             </geometry>
         </visual>
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://agx_arm_description/agx_arm_urdf/piper/meshes/gripper_link2.stl"/>
+                <mesh filename="package://tego_description/urdf/piper/meshes/gripper_link2.stl"/>
             </geometry>
         </collision>
     </link>

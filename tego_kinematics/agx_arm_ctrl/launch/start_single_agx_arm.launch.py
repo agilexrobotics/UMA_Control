@@ -1,204 +1,151 @@
+"""Start one AGX arm controller node.
+
+This is the canonical driver launch file.  Higher-level bringup files should
+include it instead of constructing ``agx_arm_ctrl_single`` directly.
+"""
+
 from launch import LaunchDescription
-from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
-import os
-from ament_index_python.packages import get_package_share_directory
-
-os.environ["RCUTILS_COLORIZED_OUTPUT"] = "1"
+from launch_ros.actions import Node
 
 
-def generate_launch_description():
+ARM_TYPES = ["nero", "piper", "piper_h", "piper_l", "piper_x"]
+EFFECTOR_TYPES = ["none", "agx_gripper", "revo2"]
+INSTALLATION_POSITIONS = ["horizontal", "left", "right"]
+PAYLOAD_TYPES = ["empty", "half", "full"]
+BOOL_CHOICES = ["true", "false"]
 
-    # arg
-    log_level_arg = DeclareLaunchArgument(
-        "log_level",
-        default_value="info",
-        description="Logging level (debug, info, warn, error, fatal).",
-    )
 
-    can_port_arg = DeclareLaunchArgument(
-        "can_port",
-        default_value="can0",
-        description="CAN port to be used by the AGX Arm node.",
-    )
+def _arg(name, default, description, choices=None):
+    kwargs = {"default_value": default, "description": description}
+    if choices is not None:
+        kwargs["choices"] = choices
+    return DeclareLaunchArgument(name, **kwargs)
 
-    arm_type_arg = DeclareLaunchArgument(
-        "arm_type",
-        default_value="piper",
-        choices=["nero", "piper", "piper_h", "piper_l", "piper_x"],
-        description="Robotic arm type (e.g. nero, piper, piper_h, piper_l, piper_x).",
-    )
 
-    effector_type_arg = DeclareLaunchArgument(
-        "effector_type",
-        default_value="none",
-        choices=["none", "agx_gripper", "revo2"],
-        description="End effector type (e.g. agx_gripper, revo2).",
-    )
+def _topic_name(base, suffix):
+    return [base, suffix]
 
-    auto_enable_arg = DeclareLaunchArgument(
-        "auto_enable",
-        default_value="true",
-        choices=["true", "false"],
-        description="Automatically enable the AGX Arm node.",
-    )
 
-    installation_pos_arg = DeclareLaunchArgument(
-        "installation_pos",
-        default_value="horizontal",
-        choices=["horizontal", "left", "right"],
-        description="Installation position of the arm (e.g. horizontal, left, right).",
-    )
+def generate_launch_description() -> LaunchDescription:
+    log_level = LaunchConfiguration("log_level")
+    topics_end = LaunchConfiguration("topics_end")
 
-    speed_percent_arg = DeclareLaunchArgument(
-        "speed_percent",
-        default_value="30",
-        description="Movement speed as a percentage of maximum speed.",
-    )
-
-    pub_rate_arg = DeclareLaunchArgument(
-        "pub_rate",
-        default_value="200",
-        description="Publishing rate for the AGX Arm node.",
-    )
-
-    enable_timeout_arg = DeclareLaunchArgument(
-        "enable_timeout",
-        default_value="5.0",
-        description="Timeout in seconds for arm enable/disable operations.",
-    )
-
-    payload_arg = DeclareLaunchArgument(
-        "payload",
-        default_value="empty",
-        choices=["empty", "half", "full"],
-        description="Payload type (e.g. empty, half, full).",
-    )
-
-    tcp_offset_arg = DeclareLaunchArgument(
-        "tcp_offset",
-        default_value="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
-        description="TCP offset in x, y, z, roll, pitch, yaw in meters/radians.",
-    )
-
-    publish_gripper_joint_arg = DeclareLaunchArgument(
-        "publish_gripper_joint",
-        default_value="true",
-        choices=["true", "false"],
-        description='Publish "gripper" (opening width) joint in /feedback/joint_states. '
-        "Set false when used with MoveIt (URDF only has gripper_joint1/2).",
-    )
-
-    node_name_arg = DeclareLaunchArgument(
-        "node_name", default_value="agx_arm_ctrl_single_node", description=""
-    )
-
-    topics_end_arg = DeclareLaunchArgument(
-        "topics_end", default_value="", description=""
-    )
-
-    # node
-    agx_arm_node = Node(
+    driver = Node(
         package="agx_arm_ctrl",
         executable="agx_arm_ctrl_single",
         name=LaunchConfiguration("node_name"),
         output="screen",
-        ros_arguments=["--log-level", LaunchConfiguration("log_level")],
+        ros_arguments=["--log-level", log_level],
         parameters=[
             {
                 "can_port": LaunchConfiguration("can_port"),
-                "pub_rate": LaunchConfiguration("pub_rate"),
-                "auto_enable": LaunchConfiguration("auto_enable"),
                 "arm_type": LaunchConfiguration("arm_type"),
+                "effector_type": LaunchConfiguration("effector_type"),
+                "auto_enable": LaunchConfiguration("auto_enable"),
                 "speed_percent": LaunchConfiguration("speed_percent"),
+                "pub_rate": LaunchConfiguration("pub_rate"),
                 "enable_timeout": LaunchConfiguration("enable_timeout"),
                 "installation_pos": LaunchConfiguration("installation_pos"),
-                "effector_type": LaunchConfiguration("effector_type"),
                 "payload": LaunchConfiguration("payload"),
                 "tcp_offset": LaunchConfiguration("tcp_offset"),
                 "publish_gripper_joint": LaunchConfiguration("publish_gripper_joint"),
             }
         ],
         remappings=[
-            (
-                "/feedback/joint_states",
-                ["/feedback/joint_states", LaunchConfiguration("topics_end")],
-            ),
-            (
-                "/feedback/tcp_pose",
-                ["/feedback/tcp_pose", LaunchConfiguration("topics_end")],
-            ),
-            (
-                "/feedback/arm_status",
-                ["/feedback/arm_status", LaunchConfiguration("topics_end")],
-            ),
+            ("/feedback/joint_states", _topic_name("/feedback/joint_states", topics_end)),
+            ("/feedback/tcp_pose", _topic_name("/feedback/tcp_pose", topics_end)),
+            ("/feedback/arm_status", _topic_name("/feedback/arm_status", topics_end)),
             (
                 "/feedback/arm_ctrl_states",
-                ["/feedback/arm_ctrl_states", LaunchConfiguration("topics_end")],
+                _topic_name("/feedback/arm_ctrl_states", topics_end),
             ),
             (
                 "/feedback/gripper_status",
-                ["/feedback/gripper_status", LaunchConfiguration("topics_end")],
+                _topic_name("/feedback/gripper_status", topics_end),
             ),
-            (
-                "/feedback/hand_status",
-                ["/feedback/hand_status", LaunchConfiguration("topics_end")],
-            ),
-            # control topics
-            (
-                "/control/joint_states",
-                ["/control/joint_states", LaunchConfiguration("topics_end")],
-            ),  # move_js joint_states
-            ("/control/move_j", ["/control/move_j", LaunchConfiguration("topics_end")]),
-            ("/control/move_p", ["/control/move_p", LaunchConfiguration("topics_end")]),
-            ("/control/move_l", ["/control/move_l", LaunchConfiguration("topics_end")]),
-            ("/control/move_c", ["/control/move_c", LaunchConfiguration("topics_end")]),
-            (
-                "/control/move_mit",
-                ["/control/move_mit", LaunchConfiguration("topics_end")],
-            ),
-            (
-                "/control/move_js",
-                ["/control/move_js", LaunchConfiguration("topics_end")],
-            ),
-            (
-                "/control/gripper",
-                ["/control/gripper", LaunchConfiguration("topics_end")],
-            ),
-            ("/control/hand", ["/control/hand", LaunchConfiguration("topics_end")]),
+            ("/feedback/hand_status", _topic_name("/feedback/hand_status", topics_end)),
+            ("/control/joint_states", _topic_name("/control/joint_states", topics_end)),
+            ("/control/move_j", _topic_name("/control/move_j", topics_end)),
+            ("/control/move_p", _topic_name("/control/move_p", topics_end)),
+            ("/control/move_l", _topic_name("/control/move_l", topics_end)),
+            ("/control/move_c", _topic_name("/control/move_c", topics_end)),
+            ("/control/move_mit", _topic_name("/control/move_mit", topics_end)),
+            ("/control/move_js", _topic_name("/control/move_js", topics_end)),
+            ("/control/gripper", _topic_name("/control/gripper", topics_end)),
+            ("/control/hand", _topic_name("/control/hand", topics_end)),
             (
                 "/control/hand_position_time",
-                ["/control/hand_position_time", LaunchConfiguration("topics_end")],
+                _topic_name("/control/hand_position_time", topics_end),
             ),
-            # services
-            ("/enable_agx_arm", ["/enable_agx_arm", LaunchConfiguration("topics_end")]),
-            ("/move_home", ["/move_home", LaunchConfiguration("topics_end")]),
-            (
-                "/exit_teach_mode",
-                ["/exit_teach_mode", LaunchConfiguration("topics_end")],
-            ),
+            ("/enable_agx_arm", _topic_name("/enable_agx_arm", topics_end)),
+            ("/move_home", _topic_name("/move_home", topics_end)),
+            ("/exit_teach_mode", _topic_name("/exit_teach_mode", topics_end)),
         ],
     )
 
     return LaunchDescription(
         [
-            # arguments
-            log_level_arg,
-            can_port_arg,
-            arm_type_arg,
-            effector_type_arg,
-            auto_enable_arg,
-            installation_pos_arg,
-            speed_percent_arg,
-            pub_rate_arg,
-            enable_timeout_arg,
-            payload_arg,
-            tcp_offset_arg,
-            publish_gripper_joint_arg,
-            node_name_arg,
-            topics_end_arg,
-            # node
-            agx_arm_node,
+            _arg("can_port", "can0", "SocketCAN interface connected to the arm."),
+            _arg(
+                "arm_type",
+                "piper",
+                "Arm model supported by the pyAgxArm driver.",
+                ARM_TYPES,
+            ),
+            _arg(
+                "effector_type",
+                "none",
+                "End-effector implementation.",
+                EFFECTOR_TYPES,
+            ),
+            _arg(
+                "auto_enable",
+                "true",
+                "Automatically enable the arm after connecting.",
+                BOOL_CHOICES,
+            ),
+            _arg(
+                "installation_pos",
+                "horizontal",
+                "Arm installation orientation used for gravity compensation.",
+                INSTALLATION_POSITIONS,
+            ),
+            _arg(
+                "speed_percent",
+                "100",
+                "Motion speed as a percentage of the driver maximum.",
+            ),
+            _arg("pub_rate", "200.0", "Feedback publication rate in Hz."),
+            _arg(
+                "enable_timeout",
+                "5.0",
+                "Timeout in seconds for enable/disable operations.",
+            ),
+            _arg("payload", "empty", "Payload preset.", PAYLOAD_TYPES),
+            _arg(
+                "tcp_offset",
+                "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+                "TCP offset [x, y, z, roll, pitch, yaw] in m/rad.",
+            ),
+            _arg(
+                "publish_gripper_joint",
+                "true",
+                "Publish the aggregate gripper joint in feedback/joint_states.",
+                BOOL_CHOICES,
+            ),
+            _arg(
+                "node_name",
+                "agx_arm_ctrl_single_node",
+                "Unique ROS node name.",
+            ),
+            _arg(
+                "topics_end",
+                "",
+                "Suffix appended to every driver topic and service; use _left/_right for dual-arm operation.",
+            ),
+            _arg("log_level", "info", "ROS logging level."),
+            driver,
         ]
     )
