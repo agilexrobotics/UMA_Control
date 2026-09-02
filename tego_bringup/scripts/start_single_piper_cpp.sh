@@ -17,7 +17,7 @@ if [[ -z "${WORKSPACE_DIR}" ]]; then
   WORKSPACE_DIR="${WORKSPACE_DIR:-${SCRIPT_DIR}}"
 fi
 CONDA_BASE="${CONDA_BASE:-${HOME}/miniconda3}"
-CONDA_ENV="nero_ik"
+CONDA_ENV="tego"
 # 单臂 piper:C++ 手柄桥接;SIDE=left/right 选择左右,可用 LAUNCH_FILE 完全覆盖
 SIDE="${SIDE:-right}"
 case "${SIDE}" in
@@ -37,16 +37,13 @@ if [[ ! -f "${WORKSPACE_DIR}/install/setup.bash" ]]; then
   exit 1
 fi
 
-source "${CONDA_BASE}/etc/profile.d/conda.sh"
-conda activate "${CONDA_ENV}"
-CONDA_SITE="${CONDA_PREFIX}/lib/python3.10/site-packages"
 source /opt/ros/humble/setup.bash
 source "${WORKSPACE_DIR}/install/setup.bash"
 
 set -u
 
 # Do not leak Conda's NumPy into the system-Python arm driver and GUI.
-if [[ "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
+if [[ -n "${CONDA_SITE}" && "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
   PYTHONPATH="${PYTHONPATH//${CONDA_SITE}/}"
   PYTHONPATH="${PYTHONPATH//::/:}"
   PYTHONPATH="${PYTHONPATH#:}"

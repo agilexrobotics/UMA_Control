@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-09-02
+
+- 新增离线 `arm_safety_monitor` RViz 编辑流程：通过 URDF 和关节 GUI 调整姿态，通过RViz Interactive Markers编辑并保存工作空间 Box 与虚拟墙 Plane。
+- 增加 RViz 安全空间交互编辑：工作空间和虚拟墙只显示名称，虚拟墙显示可随墙拖动的法向量箭头；没有任何对象时可通过绿色“安全空间设置”球创建第一个对象，已有对象后可直接使用对应 Marker 菜单；支持右键翻转法向，保存时直接写回配置文件。
+
 ## [1.0.0] - 2026-09-01
 
 首个面向 Nero 与 Piper 遥操的稳定版本。

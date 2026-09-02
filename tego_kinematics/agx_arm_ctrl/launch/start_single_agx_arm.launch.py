@@ -9,7 +9,6 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-
 ARM_TYPES = ["nero", "piper", "piper_h", "piper_l", "piper_x"]
 EFFECTOR_TYPES = ["none", "agx_gripper", "revo2"]
 INSTALLATION_POSITIONS = ["horizontal", "left", "right"]
@@ -36,6 +35,7 @@ def generate_launch_description() -> LaunchDescription:
         package="agx_arm_ctrl",
         executable="agx_arm_ctrl_single",
         name=LaunchConfiguration("node_name"),
+        prefix="python3",
         output="screen",
         ros_arguments=["--log-level", log_level],
         parameters=[
@@ -54,7 +54,10 @@ def generate_launch_description() -> LaunchDescription:
             }
         ],
         remappings=[
-            ("/feedback/joint_states", _topic_name("/feedback/joint_states", topics_end)),
+            (
+                "/feedback/joint_states",
+                _topic_name("/feedback/joint_states", topics_end),
+            ),
             ("/feedback/tcp_pose", _topic_name("/feedback/tcp_pose", topics_end)),
             ("/feedback/arm_status", _topic_name("/feedback/arm_status", topics_end)),
             (

@@ -2,7 +2,7 @@
 
 ## 概述
 
-`tego_control` 是基于 ROS 2 的示教器主从遥操集成包，使用底层的 [tego_sdk](https://gitlab.agilex.ai/sjq01/tego_sdk) 进行 CAN 通信和协议编解码，并在 `tego_ros` 节点中把手柄状态、关节命令、IMU 与机械臂驱动桥接起来。机械臂运动学、关节映射、回零目标和安全约束由 `RobotProfile` 统一配置，当前包含 Nero 与 Piper 示例 profile。
+`tego_control` 是基于 ROS 2 的示教器主从遥操集成包，使用底层的 [tego_sdk](https://gitlab.agilex.ai/sjq01/tego_sdk) 进行 CAN 通信和协议编解码，并在 `tego_ros` 节点中把手柄状态、关节命令、IMU 与机械臂驱动桥接起来。机械臂运动学、关节映射、回零目标和安全约束由机械臂参数统一配置，当前包含 Nero 与 Piper 示例配置文件。
 
 ---
 
@@ -22,7 +22,7 @@
 |---|---|
 |`tego_msgs`|ROS 消息与 service 定义（手柄/传感器状态、编码器控制）|
 |`tego_ros`|SDK ↔ ROS 2 桥接、状态发布、控制转发；提供手柄与机械臂命令桥接|
-|`tego_bringup`|launch、CAN 配置脚本、Nero/Piper 示例入口、机械臂 profile 配置|
+|`tego_bringup`|launch、CAN 配置脚本、Nero/Piper 示例入口、机械臂配置文件|
 |`tego_description`|URDF、网格、RViz 配置|
 |`tego_kinematics/agx_arm_ctrl`|Nero/AgileX 示例机械臂驱动、Pinocchio 遥操节点、夹爪/灵巧手控制|
 |`tego_kinematics/agx_arm_msgs`|示例机械臂、夹爪和灵巧手消息定义|
@@ -76,30 +76,44 @@ sudo apt install -y \
   libnlopt-dev libnlopt-cxx-dev
 ```
 
-两种 bridge 都会启动 `agx_arm_ctrl` 的 Python IK 节点，因此都需要 `nero_ik` 环境：
+两种 bridge 都会启动 `agx_arm_ctrl` 的 Python IK 节点，因此都需要 `tego` 环境。Conda 未初始化时（`conda: 未找到命令`）先手动加载：
 
 ```bash
-conda create -n nero_ik --override-channels -c conda-forge python=3.10 -y
-conda activate nero_ik
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"        # 按实际安装位置修改
+source "$CONDA_BASE/etc/profile.d/conda.sh"         # 已执行过 conda init 可跳过
+
+conda create -n tego --override-channels -c conda-forge python=3.10 -y
+conda activate tego
 conda install --override-channels -c conda-forge \
   "pinocchio=3.2.0" "casadi=3.6.7" scipy -y
 python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
   pyyaml opencv-python ur-rtde netifaces meshcat
 ```
 
-如果使用仓库内的 Nero/Piper 示例驱动，还需要安装其驱动依赖：
+验证环境（激活 `tego` 后）：
 
 ```bash
-python3 -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
+python -c "import sys; print(sys.executable)"          # 应指向 tego 的 python
+python -c "import pinocchio, casadi, scipy; print('IK dependencies are ready')"
 ```
 
-> `nero_ik` 只负责 IK 和安全约束，不代表机械臂驱动已经连接。真实机械臂是否能使能、回零和执行命令，取决于驱动层。
+如果使用仓库内的 Nero/Piper 示例驱动，还需要把驱动依赖装进**同一个 conda 环境**（激活 `tego` 后）：
+
+```bash
+conda activate tego
+python -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
+python -c "import pyAgxArm; print('pyAgxArm OK')"
+```
+
+> **统一环境（重要）**：所有 Python 节点（机械臂示例驱动、遥操 IK、Python 桥接）都在 `tego` conda 环境中运行——launch 统一使用 `prefix=python3` 指向 conda 解释器。因此 pinocchio/casadi、pyAgxArm、python-can、tego_sdk 全部装进 `tego`，**不依赖系统 Python 的任何包**。安装前先确认 `python` 指向 conda：`python -c "import sys; print(sys.executable)"`。
+
+> `tego` 环境负责 IK、安全约束和示例驱动，不代表机械臂已经连接。真实机械臂是否能使能、回零和执行命令，取决于驱动层。
 
 ### 3. 依赖与构建
 
 #### 3.1 C++
 
-C++ 用户使用 `tego_ros_node` 作为手柄 bridge。它链接 `tego_sdk/c++`，**不需要**安装 Python `tego_sdk` 或 `python-can`。但仍然需要上一节的 `nero_ik` 环境，因为 IK 节点是 Python 实现。
+C++ 用户使用 `tego_ros_node` 作为手柄 bridge。它链接 `tego_sdk/c++`，**不需要**安装 Python `tego_sdk` 或 `python-can`。但仍然需要上一节的 `tego` 环境，因为 IK 节点是 Python 实现。
 
 在工作空间根目录构建 C++ 链路：
 
@@ -132,7 +146,7 @@ ros2 pkg prefix tego_ros
 Python 用户使用 `tego_ros_py_node.py` 作为手柄 bridge。Python bridge 需要额外安装 `python-can` 和 `tego_sdk/python`：
 
 ```bash
-conda activate nero_ik
+conda activate tego
 python -m pip install python-can
 python -m pip install -e ~/tego/src/tego_sdk/python
 python -c "import can, tego_sdk; print('Python SDK dependencies are ready')"
@@ -154,7 +168,7 @@ colcon build \
 source install/setup.bash
 ```
 
-`start_*_python.sh` 会自动激活 `nero_ik`，并把 `src/tego_sdk/python` 加入 `PYTHONPATH` 作为源码导入兜底；手动启动 Python launch 时，请确保当前终端已激活 `nero_ik` 且能导入 `can`、`tego_sdk`。
+`start_*_python.sh` 会自动激活 `tego`，并把 `src/tego_sdk/python` 加入 `PYTHONPATH` 作为源码导入兜底；手动启动 Python launch 时，请确保当前终端已激活 `tego` 且能导入 `can`、`tego_sdk`。
 
 ---
 
@@ -250,7 +264,7 @@ source /opt/ros/humble/setup.bash
 source ~/tego/install/setup.bash
 
 ros2 launch agx_arm_ctrl start_double_arm.launch.py
-conda activate nero_ik
+conda activate tego
 ros2 launch agx_arm_ctrl teleop_double_arm.launch.py \
   profile_path:=$(ros2 pkg prefix tego_bringup)/share/tego_bringup/config/nero_profile.yaml
 ros2 launch tego_bringup demo_nero_bringup.launch.py start_arm:=false start_teleop:=false
@@ -261,7 +275,7 @@ ros2 launch tego_bringup demo_nero_bringup.launch.py start_arm:=false start_tele
 Python bridge 节点为 `tego_ros_py_node.py`。启动前确认：
 
 ```bash
-conda activate nero_ik
+conda activate tego
 python -c "import can, tego_sdk; print('Python SDK dependencies are ready')"
 ```
 
@@ -277,7 +291,7 @@ bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/tego/install/setup.bash
-conda activate nero_ik
+conda activate tego
 ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
 ```
 
@@ -299,7 +313,7 @@ SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_python.s
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/tego/install/setup.bash
-conda activate nero_ik
+conda activate tego
 ros2 launch tego_bringup demo_piper.launch.py backend:=python             # 右臂
 ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python  # 左臂
 ```
@@ -325,7 +339,7 @@ start_single_piper_cpp.sh
 start_single_piper_python.sh
 ```
 
-四个脚本都会自动 source ROS 2 和工作空间、激活 `nero_ik`，并在退出时清理本次启动的控制进程。Piper 脚本支持 `SIDE=left/right`；Python 脚本还支持 `LAUNCH_FILE` 覆盖默认入口，所有脚本支持 `WORKSPACE_DIR` 和 `CONDA_BASE`：
+四个脚本都会自动 source ROS 2 和工作空间、激活 `tego`，并在退出时清理本次启动的控制进程。Piper 脚本支持 `SIDE=left/right`；Python 脚本还支持 `LAUNCH_FILE` 覆盖默认入口，所有脚本支持 `WORKSPACE_DIR` 和 `CONDA_BASE`：
 
 ```bash
 WORKSPACE_DIR=~/tego CONDA_BASE=~/miniconda3 \
@@ -336,7 +350,7 @@ WORKSPACE_DIR=~/tego CONDA_BASE=~/miniconda3 \
 
 ### 5. 控制层与底层驱动边界
 
-本仓库不实现各品牌机械臂的 SDK、CAN、串口或 EtherCAT 适配。接入其他机械臂时，驱动层由用户自行开发；本仓库只约定 ROS topic、消息、profile 和 launch 接口。用户驱动至少需要：
+本仓库不实现各品牌机械臂的 SDK、CAN、串口或 EtherCAT 适配。接入其他机械臂时，驱动层由用户自行开发；本仓库只约定 ROS topic、消息、配置文件和 launch 接口。用户驱动至少需要：
 
 ```text
 发布  /feedback/joint_states_left（或 right）
@@ -592,6 +606,68 @@ ros2 service list | grep -E 'teleop_trigger|reset_control'
 
 ---
 
+
+## 安全空间编辑器
+
+`arm_safety_monitor` 是一个离线安全空间编辑器，直接读取 `tego_bringup/config/` 下的配置文件，在 RViz 中显示并编辑：
+
+- `safety.workspace` 对应轴对齐工作空间 Box；
+- `safety.virtual_walls` 对应虚拟墙 Plane；
+- 保存时只增量更新配置文件的 `safety` 配置，并将 `safety` 块放到文件末尾；
+- `robot`、`ik`、`handle` 等非安全配置及其注释会保留，不会被整份 YAML 重写；
+- 保存会直接原子写回当前配置文件；
+- 保存后的约束需要重启遥操节点后生效，不会热更新正在运行的 IK 节点。
+
+安全空间编辑阶段不需要连接真实机械臂，也不需要读取 `/feedback/joint_states_left/right`。用户通过 `joint_state_publisher_gui` 手动调节关节角度，在 RViz 中观察目标姿态并配置安全空间。
+
+启动默认 Piper配置文件：
+
+```bash
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch arm_safety_monitor safety_monitor.launch.py
+```
+
+切换其他机械臂时只需修改配置文件文件名：
+
+```bash
+ros2 launch arm_safety_monitor safety_monitor.launch.py \
+  profile_name:=nero_profile.yaml
+```
+
+launch 默认优先从工作区源码目录 `tego_bringup/config/` 查找配置文件，并使用其中的 `robot.urdf_path` 加载 URDF；保存时会直接修改源码配置文件，而不是只修改 `install` 副本。非源码安装环境会回退到 ROS package share 下的 config 目录，也可以通过 `TEGO_PROFILE_DIR` 指定可编辑目录。支持 `package://` 路径，不需要再在 RViz 中手动配置 RobotModel 或 URDF。RViz 配置已预置 `InteractiveMarkers`，其 `Update Topic` 为 `/arm_safety/update`，不需要再手动添加该显示项。launch 会启动：
+
+```text
+robot_state_publisher
+    ↑
+joint_state_publisher_gui  ← 手动调节关节角度
+    ↓
+   /tf
+    ↓
+RViz  ← 机器人模型和安全空间
+```
+
+另外还会启动 `arm_safety_monitor_node` 负责读取、编辑和保存安全空间。这里的 `robot_state_publisher` 和 `joint_state_publisher_gui` 只是离线模型显示所需的辅助节点，不属于机械臂驱动层；URDF 本身不能根据关节角度发布可动 link 的 TF。
+
+RViz 操作流程：
+
+1. 将 `Fixed Frame` 设置为配置文件中的 `robot.base_frame`，Piper/Nero 默认是 `base_link`；
+2. 在 `joint_state_publisher_gui` 中拖动关节滑块，调整目标姿态；
+3. 已配置的 Box 和 Plane 会自动生成，Marker 文本只显示对应的工作空间或墙名称；
+4. 当配置文件中还没有任何工作空间或虚拟墙时，可右键`base_frame`的绿色球创建第一个 Box/Plane；绿色球不是唯一的编辑入口，已有对象后可直接右键对应Marker 使用菜单；
+5. 拖动 Box 修改中心；需要调整尺寸或删除 Box 时，右键 Box 本体后使用对应菜单；
+6. Plane 会显示绿色法向量箭头；普通鼠标左键拖动墙面可平移墙，拖动绿色箭头可调整法向；按住 `Ctrl` 再用鼠标左键拖动墙面可旋转墙的朝向；
+7. 需要翻转法向或删除虚拟墙时，右键虚拟墙本体，选择对应菜单；
+8. 也可以调用保存服务：
+
+```bash
+ros2 service call /arm_safety_monitor/save std_srvs/srv/Trigger '{}'
+```
+
+如果 RViz 出现 `No transform from [link5] to [base_link]`，检查 `joint_state_publisher_gui`、`robot_state_publisher`、profile 中的 URDF 和 RViz 的 `Fixed Frame`。离线编辑模式不依赖真实机械臂反馈 topic。
+
+当前 Box 在配置文件中保持轴对齐，不保存旋转；Plane 的 `normal` 会自动单位化，绿色箭头表示其方向。**当没有任何工作空间或虚拟墙时，绿色“安全空间设置”球用于创建第一个对象；它不是唯一的编辑入口**。已有 Box/Plane 后，可直接对对应 Marker 右键使用菜单。普通鼠标左键拖动墙面可调整墙的位置，拖动绿色法向量箭头可调整法向；按住 `Ctrl` 再用鼠标左键拖动墙面可旋转墙的朝向。`keep_side` 仍然保留在配置文件中兼容已有安全判定配置，但编辑器不再单独操作“保护侧”。`protected_frames`、`margin` 和 `keep_side` 仍然使用配置文件中的配置，编辑器不会替代 IK 约束或完整 link 碰撞检测。真实机械臂驱动层由用户二次开发负责。
+
 ## 参数限制
 
 ### 夹爪 (Gripper)
@@ -646,7 +722,7 @@ ros2 service list | grep -E 'teleop_trigger|reset_control'
 - **`tego_ros` 连接失败**：确认对应逻辑接口存在、bitrate 为 `1000000`，并检查 `/tego_l/imu` 或 `/tego_r/imu` 是否有数据
 - **遥操没有动作**：确认 `/left_teleop_enable` 或 `/right_teleop_enable` 已开启；检查对应 raw 话题 `/control/joint_states_*_raw` 和 `/control/move_js_*` 是否有数据
 - **CasADi/IPOPT 报 `Infeasible_Problem_Detected`**：例如日志中出现 `Solver failed`、`return_status is 'Infeasible_Problem_Detected'`。这表示当前 IK 优化在当前关节状态、目标位姿和安全约束组合下没有找到可接受解，**不一定是 CAN 或通信故障**。按以下顺序排查：
-  1. 确认 `profile_path` 指向实际使用的 profile，并检查 profile 的 `urdf_path`、`base_frame`、`ee_frame` / `ee_offset` 以及 `safety_frames` 是否与 URDF 一致。
+  1. 确认 `profile_path` 指向实际使用的配置文件，并检查配置文件的 `urdf_path`、`base_frame`、`ee_frame` / `ee_offset` 以及 `safety_frames` 是否与 URDF 一致。
   2. 检查关节上下限，以及 `ik.enable_hard_delta_q_constraint` 和 `ik.max_delta_q_rad`；单帧目标变化过大或最大关节增量过小，都可能使可行域为空。
   3. 可能是工作空间过小，检查 `safety.workspace` 的 `min`、`max`、`margin` 和 `protected_frames`，以及 `safety.virtual_walls` 的方向、`keep_side`、`margin` 和保护点；重点关注日志中的 `wall_dist`。
   4. 从当前位置做小幅度手柄动作，适当降低 `zoom_factor`；目标距离过远、接近奇异姿态或姿态变化过大时，可能导致求解器无法在实时迭代次数内收敛。

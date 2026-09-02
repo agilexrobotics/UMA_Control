@@ -30,31 +30,26 @@ ik:
   wrist_frame: wrist_safety_point                  # psi 腕部参考坐标系(引用上面 safety_frames 的别名)
   singularity_weight: 0.02                         # 奇异性惩罚权重
 
-safety:
-  safety_frames:                                   # 给机械臂关节起"保护点别名",供虚拟墙和 psi 肘部保持引用。
-                                                   # 为什么需要:虚拟墙的 protected_frames 只能填"名字",不能填 joint1/joint4
-                                                   # 这种关节号,所以在这里把关节登记成别名;墙就能保护这个关节了。
-                                                   # 纯运行时映射,不需要改 URDF。
-    shoulder_safety_point: joint1                  # 别名"肩部保护点" = joint1 的关节原点
-    elbow_safety_point: joint4                     # 别名"肘部保护点" = joint4 的关节原点
-    wrist_safety_point: joint5                     # 别名"腕部保护点" = joint5 的关节原点
-  virtual_walls:                                   # 虚拟墙
-    - name: nero_front_boundary                    # 墙名称
-      frame: base_link                             # 墙坐标系 = 相对 base_link 坐标系
-      type: plane                                  # 墙类型
-      point: [-0.7, 0.0, 0.0]                      # 墙面上一点 [x, y, z] (m),相对 base_link 原点
-      normal: [1.0, 0.0, 0.0]                      # 墙法向量,相对 base_link 方向
-      keep_side: positive                          # 保护点允许在法向哪一侧:positive/negative
-      margin: 0.01                                 # 距墙面的最小保护距离 (m)
-      protected_frames: [ee, wrist_safety_point]   # 不能穿墙的坐标系：ee 和 wrist_safety_point
-  # 若需要使用虚拟工作空间保护，请取消下面的注释并配置相应参数
-  # workspace:                                     # 盒子工作空间
-  #   frame: base_link                             # 盒子坐标系 = 相对 base_link 坐标系
-  #   type: box                                    # 类型
-  #   min: [0.3, -0.2, -0.3]                       # 盒子最小角 [x, y, z] (m),相对 base_link 原点
-  #   max: [0.7, 0.6, 0.3]                         # 盒子最大角 [x, y, z] (m),相对 base_link 原点
-  #   margin: 0.02                                 # 距每个面的保护距离 (m)
-  #   protected_frames: [ee]                       # 不能出盒的坐标系：保护 ee
-
 handle:                                          # 手柄桥接参数
   zoom_factor: 1.4                               # 手柄位姿增量缩放系数
+
+safety:
+  safety_frames:
+    shoulder_safety_point: joint1
+    elbow_safety_point: joint4
+    wrist_safety_point: joint5
+  virtual_walls: []
+  workspace:
+    frame: base_link
+    type: box
+    min:
+    - -0.644569522142
+    - -0.267667008936
+    - -0.173729722202
+    max:
+    - 0.055430477858
+    - 0.432332991064
+    - 0.226270277798
+    margin: 0.02
+    protected_frames:
+    - ee
