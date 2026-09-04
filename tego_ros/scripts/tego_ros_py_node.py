@@ -485,7 +485,7 @@ class TegoBridgeNode(Node):
         )
         self.is_init_action = self.init_action_tmp
 
-        self.get_logger().info("Version: [python] 1.0.0")
+        self.get_logger().info("Version: [python] 0.1.0")
         self.base_to_imu_roll = self.base_to_imu_roll / 180.0 * math.pi
         self.base_to_imu_pitch = self.base_to_imu_pitch / 180.0 * math.pi
         self.base_to_imu_yaw = self.base_to_imu_yaw / 180.0 * math.pi

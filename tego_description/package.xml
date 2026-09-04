@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>tego_description</name>
-  <version>1.0.0</version>
+  <version>0.1.0</version>
   <description>URDF, meshes and RViz descriptions for arms and end effectors.</description>
-  <maintainer email="1561155732@qq.com">q</maintainer>
+  <maintainer email="agilex@agilex.ai">AgileX Robotics</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

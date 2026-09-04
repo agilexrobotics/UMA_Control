@@ -149,7 +149,7 @@ void TegoRosMessenger::declareParameters()
     is_init_action.store(init_action_parameter);
     init_action_tmp.store(init_action_parameter);
 
-    RCLCPP_INFO(this->get_logger(), "Version: [ros2] 1.0.0");
+    RCLCPP_INFO(this->get_logger(), "Version: [ros2] 0.1.0");
     RCLCPP_INFO(this->get_logger(), "check_get: %s", Bool2String[check_get_].c_str());
     RCLCPP_INFO(this->get_logger(), "wait_feedback: %s", Bool2String[wait_feedback_].c_str());
     RCLCPP_INFO(this->get_logger(), "publish_sim_joint: %s", Bool2String[publish_sim_joint_].c_str());

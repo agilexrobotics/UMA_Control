@@ -5,7 +5,7 @@ package_name = 'agx_arm_ctrl'
 
 setup(
     name=package_name,
-    version='1.0.0',
+    version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -24,8 +24,8 @@ setup(
         'PyYAML',
     ],
     zip_safe=True,
-    maintainer='root',
-    maintainer_email='root@todo.todo',
+    maintainer='AgileX Robotics',
+    maintainer_email='agilex@agilex.ai',
     description='AgileX Robotic Arm ROS Package',
     license='Apache-2.0',
     entry_points={

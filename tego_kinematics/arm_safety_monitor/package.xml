@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>arm_safety_monitor</name>
-  <version>1.0.0</version>
+  <version>0.1.0</version>
   <description>RViz editor for workspace and virtual-wall safety constraints in robot profiles.</description>
-  <maintainer email="2540488682@qq.com">jinhuadeng</maintainer>
+  <maintainer email="agilex@agilex.ai">AgileX Robotics</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>ament_index_python</exec_depend>

@@ -7,7 +7,7 @@ package_name = "arm_safety_monitor"
 
 setup(
     name=package_name,
-    version="1.0.0",
+    version="0.1.0",
     packages=find_packages(exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -18,8 +18,8 @@ setup(
     zip_safe=True,
     test_suite="test",
     tests_require=["pytest"],
-    maintainer="jinhuadeng",
-    maintainer_email="2540488682@qq.com",
+    maintainer="AgileX Robotics",
+    maintainer_email="agilex@agilex.ai",
     description="RViz safety workspace and virtual-wall editor for robot profiles.",
     license="Apache-2.0",
     entry_points={
