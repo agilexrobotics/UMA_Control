@@ -7,8 +7,6 @@
   <maintainer email="2540488682@qq.com">jinhuadeng</maintainer>
   <license>Apache-2.0</license>
 
-  <buildtool_depend>ament_python</buildtool_depend>
-
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>interactive_markers</exec_depend>

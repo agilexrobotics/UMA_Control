@@ -30,8 +30,8 @@ ik:
   wrist_frame: wrist_safety_point                  # psi 腕部参考坐标系(引用上面 safety_frames 的别名)
   singularity_weight: 0.02                         # 奇异性惩罚权重
 
-handle:                                          # 手柄桥接参数
-  zoom_factor: 1.4                               # 手柄位姿增量缩放系数
+handle:                                            # 手柄桥接参数
+  zoom_factor: 1.4                                 # 手柄位姿增量缩放系数
 
 safety:
   safety_frames:

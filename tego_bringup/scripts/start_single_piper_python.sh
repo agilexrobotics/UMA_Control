@@ -18,7 +18,6 @@ if [[ -z "${WORKSPACE_DIR}" ]]; then
 fi
 CONDA_BASE="${CONDA_BASE:-${HOME}/miniconda3}"
 CONDA_ENV="tego"
-# 单臂 piper:Python 手柄桥接;SIDE=left/right 选择左右,可用 LAUNCH_FILE 完全覆盖
 SIDE="${SIDE:-right}"
 case "${SIDE}" in
   left|right) EXTRA_LAUNCH_ARGS=(side:=${SIDE} backend:=python) ;;
@@ -40,7 +39,8 @@ source "${WORKSPACE_DIR}/install/setup.bash"
 
 set -u
 
-# 与 start_dual_nero_cpp.sh 一致:不把 Conda 的 NumPy 泄漏给系统 Python 驱动/GUI
+CONDA_SITE="${CONDA_SITE:-${CONDA_PREFIX:+${CONDA_PREFIX}/lib/python3.10/site-packages}}"
+
 if [[ -n "${CONDA_SITE}" && "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
   PYTHONPATH="${PYTHONPATH//${CONDA_SITE}/}"
   PYTHONPATH="${PYTHONPATH//::/:}"

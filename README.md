@@ -87,7 +87,8 @@ conda activate tego
 conda install --override-channels -c conda-forge \
   "pinocchio=3.2.0" "casadi=3.6.7" scipy -y
 python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
-  pyyaml opencv-python ur-rtde netifaces meshcat
+  pyyaml opencv-python ur-rtde netifaces meshcat \
+  typing_extensions exceptiongroup
 ```
 
 验证环境（激活 `tego` 后）：
@@ -106,7 +107,6 @@ python -c "import pyAgxArm; print('pyAgxArm OK')"
 ```
 
 > **统一环境（重要）**：所有 Python 节点（机械臂示例驱动、遥操 IK、Python 桥接）都在 `tego` conda 环境中运行——launch 统一使用 `prefix=python3` 指向 conda 解释器。因此 pinocchio/casadi、pyAgxArm、python-can、tego_sdk 全部装进 `tego`，**不依赖系统 Python 的任何包**。安装前先确认 `python` 指向 conda：`python -c "import sys; print(sys.executable)"`。
-
 > `tego` 环境负责 IK、安全约束和示例驱动，不代表机械臂已经连接。真实机械臂是否能使能、回零和执行命令，取决于驱动层。
 
 ### 3. 依赖与构建
@@ -657,16 +657,9 @@ RViz 操作流程：
 4. 当配置文件中还没有任何工作空间或虚拟墙时，可右键`base_frame`的绿色球创建第一个 Box/Plane；绿色球不是唯一的编辑入口，已有对象后可直接右键对应Marker 使用菜单；
 5. 拖动 Box 修改中心；需要调整尺寸或删除 Box 时，右键 Box 本体后使用对应菜单；
 6. Plane 会显示绿色法向量箭头；普通鼠标左键拖动墙面可平移墙，拖动绿色箭头可调整法向；按住 `Ctrl` 再用鼠标左键拖动墙面可旋转墙的朝向；
-7. 需要翻转法向或删除虚拟墙时，右键虚拟墙本体，选择对应菜单；
-8. 也可以调用保存服务：
-
-```bash
-ros2 service call /arm_safety_monitor/save std_srvs/srv/Trigger '{}'
-```
+7. 需要翻转法向、增删虚拟墙或者保存时，右键虚拟墙本体，选择对应菜单。
 
 如果 RViz 出现 `No transform from [link5] to [base_link]`，检查 `joint_state_publisher_gui`、`robot_state_publisher`、profile 中的 URDF 和 RViz 的 `Fixed Frame`。离线编辑模式不依赖真实机械臂反馈 topic。
-
-当前 Box 在配置文件中保持轴对齐，不保存旋转；Plane 的 `normal` 会自动单位化，绿色箭头表示其方向。**当没有任何工作空间或虚拟墙时，绿色“安全空间设置”球用于创建第一个对象；它不是唯一的编辑入口**。已有 Box/Plane 后，可直接对对应 Marker 右键使用菜单。普通鼠标左键拖动墙面可调整墙的位置，拖动绿色法向量箭头可调整法向；按住 `Ctrl` 再用鼠标左键拖动墙面可旋转墙的朝向。`keep_side` 仍然保留在配置文件中兼容已有安全判定配置，但编辑器不再单独操作“保护侧”。`protected_frames`、`margin` 和 `keep_side` 仍然使用配置文件中的配置，编辑器不会替代 IK 约束或完整 link 碰撞检测。真实机械臂驱动层由用户二次开发负责。
 
 ## 参数限制
 

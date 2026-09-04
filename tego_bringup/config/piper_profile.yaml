@@ -22,39 +22,23 @@ ik:
   singularity_weight: 0.02                       # 奇异性惩罚权重
 
 handle:                                          # 手柄桥接参数
-  zoom_factor: 1.1                               # 手柄位姿增量缩放系数
+  zoom_factor: 1.0                               # 手柄位姿增量缩放系数
 
 safety:
   safety_frames:
     wrist_safety_point: joint5
-  virtual_walls:
-  - name: rviz_wall_1
+  virtual_walls: []
+  workspace:
     frame: base_link
-    type: plane
-    point:
-    - -0.029356196522712708
-    - 0.1444886326789856
-    - 0.6542930006980896
-    normal:
-    - 0.0
-    - 0.0
-    - -1.0
-    keep_side: negative
-    margin: 0.01
+    type: box
+    min:
+    - -0.322233359516
+    - -0.160924696922
+    - -0.075695610046
+    max:
+    - 0.277766640484
+    - 0.139075303078
+    - 0.624304389954
+    margin: 0.02
     protected_frames:
-    - ee
-  - name: rviz_wall_2
-    frame: base_link
-    type: plane
-    point:
-    - 0.0026292353868484497
-    - -0.016030192375183105
-    - -0.004005908966064453
-    normal:
-    - 0.0
-    - 0.0
-    - 1.0
-    keep_side: positive
-    margin: 0.01
-    protected_frames:
-    - ee
+    - link3

@@ -6,8 +6,6 @@
   <description>Bringup and launch files for the tego controller and Nero example adapter.</description>
   <maintainer email="agilex@agilex.ai">AgileX Robotics</maintainer>
   <license>Apache-2.0</license>
-  <buildtool_depend>ament_python</buildtool_depend>
-
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>tego_ros</exec_depend>

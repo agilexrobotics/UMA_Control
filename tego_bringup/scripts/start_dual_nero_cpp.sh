@@ -37,7 +37,8 @@ source "${WORKSPACE_DIR}/install/setup.bash"
 
 set -u
 
-# Do not leak Conda's NumPy into the system-Python arm driver and GUI.
+CONDA_SITE="${CONDA_SITE:-${CONDA_PREFIX:+${CONDA_PREFIX}/lib/python3.10/site-packages}}"
+
 if [[ -n "${CONDA_SITE}" && "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
   PYTHONPATH="${PYTHONPATH//${CONDA_SITE}/}"
   PYTHONPATH="${PYTHONPATH//::/:}"
@@ -53,7 +54,6 @@ unset PYTHONNOUSERSITE
 
 cd "${WORKSPACE_DIR}"
 
-# 启动前清理上次遗留的栈进程(Ctrl+C 可能残留孤儿进程,重复节点会导致遥操抖动)
 for pat in "agx_arm_ctrl_single" "teleop_single_arm_node" "tego_ros_node" "tego_ros_py_node"; do
   pkill -f "${pat}" 2>/dev/null || true
 done
