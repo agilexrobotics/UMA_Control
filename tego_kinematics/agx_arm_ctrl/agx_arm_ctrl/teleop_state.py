@@ -1,9 +1,53 @@
 """Pure helpers for live-feedback teleoperation state."""
 
+import math
 import threading
 from typing import Callable, Sequence
 
 import numpy as np
+
+try:
+    from .robot_profile import validate_installation_pos
+except ImportError:  # Support direct execution beside the teleop script.
+    from robot_profile import validate_installation_pos
+
+
+def installation_rotation(installation_pos: str) -> np.ndarray:
+    """Return the handle-world to arm-base rotation for an installation."""
+    position = validate_installation_pos(installation_pos)
+    # Side mappings preserve the Nero v0.1.0 home-FK translation axes.
+    rotations = {
+        "horizontal": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        "left": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        "right": [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+    }
+    return np.array(rotations[position], dtype=float)
+
+
+def _rotation_matrix(value, name: str) -> np.ndarray:
+    try:
+        rotation = np.asarray(value, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} 必须为 3x3 数字旋转矩阵") from exc
+    if rotation.shape != (3, 3) or not np.isfinite(rotation).all():
+        raise ValueError(f"{name} 必须为有限的 3x3 旋转矩阵")
+    if not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-6):
+        raise ValueError(f"{name} 必须为正交旋转矩阵")
+    if not math.isclose(float(np.linalg.det(rotation)), 1.0, abs_tol=1e-6):
+        raise ValueError(f"{name} 行列式必须为 +1")
+    return rotation
+
+
+def build_translation_mapping(
+    installation_pos: str,
+    home_rotation,
+    handle_start_rotation,
+):
+    """Return the home correction and handle-local to arm-base rotation."""
+    home = _rotation_matrix(home_rotation, "home_rotation")
+    handle_start = _rotation_matrix(handle_start_rotation, "handle_start_rotation")
+    correction = installation_rotation(installation_pos) @ handle_start @ home.T
+    return correction, correction @ home
 
 
 class FeedbackSnapshot:

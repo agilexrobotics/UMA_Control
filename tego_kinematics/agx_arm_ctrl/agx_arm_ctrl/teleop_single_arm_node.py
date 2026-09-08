@@ -38,12 +38,14 @@ except ImportError:  # Support execution as the installed ROS script.
 try:
     from .teleop_state import (
         FeedbackSnapshot,
+        build_translation_mapping,
         build_live_reference_matrices,
         feedback_is_fresh,
     )
 except ImportError:  # Support execution as the installed ROS script.
     from teleop_state import (
         FeedbackSnapshot,
+        build_translation_mapping,
         build_live_reference_matrices,
         feedback_is_fresh,
     )
@@ -715,6 +717,8 @@ class RosOperator(Node):
         self.declare_parameter("profile_path", "")
         self.declare_parameter("feedback_timeout_sec", 1.0)
         self.side = self.get_parameter("side").get_parameter_value().string_value
+        if self.side not in ("left", "right"):
+            raise ValueError(f"unsupported arm side: {self.side}")
         self.feedback_timeout_sec = float(
             self.get_parameter("feedback_timeout_sec").value
         )
@@ -728,6 +732,7 @@ class RosOperator(Node):
                 "必须提供 profile_path 参数,例如 tego_bringup/config/nero_profile.yaml"
             )
         self.profile = load_profile(profile_path)
+        self.installation_pos = self.profile.installation_pos_for(self.side)
         nq = self.profile.nq
 
         self.declare_parameter(
@@ -846,6 +851,7 @@ class RosOperator(Node):
         self.start_pose_matrix = xyzrpy2Mat(
             0, 0, 0, 0, 0, 0
         )  # placeholder; updated later
+        self.effective_translation_rotation = None
 
         self.is_teleop_active = False
         self.refresh_zero_matrix = True
@@ -859,6 +865,9 @@ class RosOperator(Node):
             )
         self.direction_anchor = self.get_ee_pose_matrix_by_urdf(
             home_values[: self.profile.nq]
+        )
+        self.get_logger().info(
+            f"side={self.side}, installation_pos={self.installation_pos}"
         )
         self.sync_ik_state = False
         self._teleop_status_start_flag = False
@@ -936,6 +945,7 @@ class RosOperator(Node):
         self.is_teleop_active = False
         self.refresh_zero_matrix = True
         self.refresh_start_pose_matrix = True
+        self.effective_translation_rotation = None
         self.sync_ik_state = False
         if was_active:
             self.get_logger().warning("实时关节反馈已超时，停止遥操")
@@ -1022,15 +1032,20 @@ class RosOperator(Node):
                 self.refresh_start_pose_matrix = False
                 # print("init start_matrix")
                 self.start_pose_matrix = xyzrpy2Mat(x, y, z, roll, pitch, yaw)
+                _, self.effective_translation_rotation = build_translation_mapping(
+                    self.installation_pos,
+                    self.direction_anchor[:3, :3],
+                    self.start_pose_matrix[:3, :3],
+                )
 
             # 目标 = 当前起点(zero_matrix)+ 手柄增量。
             # 旋转:增量旋转叠加在当前姿态(标准增量遥操);
-            # 平移:增量按启动时实时反馈的末端方向解释。
+            # 平移:先恢复到手柄 world 方向，再按物理安装方向映射到 base_link。
             current_matrix = xyzrpy2Mat(x, y, z, roll, pitch, yaw)
             delta = np.dot(np.linalg.inv(self.start_pose_matrix), current_matrix)
             target_matrix = np.dot(self.zero_matrix, delta)
             target_matrix[:3, 3] = self.zero_matrix[:3, 3] + np.dot(
-                self.direction_anchor[:3, :3], delta[:3, 3]
+                self.effective_translation_rotation, delta[:3, 3]
             )
             arm_control_pose = matrix2xyzrpy(target_matrix)
             self.last_ik_joint_state = self.get_ik_solution(
@@ -1075,6 +1090,7 @@ class RosOperator(Node):
         if not self.is_teleop_active:
             self.refresh_zero_matrix = True
             self.refresh_start_pose_matrix = True
+            self.effective_translation_rotation = None
             self.sync_ik_state = False
 
         response.success = True

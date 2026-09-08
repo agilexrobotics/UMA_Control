@@ -2,10 +2,8 @@ robot:
   name: piper                                    # profile 名称
   urdf_path: package://tego_description/urdf/piper/urdf/piper_description.urdf  # URDF 路径(支持 package://)
   base_frame: base_link                          # IK 目标位姿的参考基座 frame
-  installation_pos: horizontal                   # 底座安装朝向(piper 专属参数):
-                                                 #   horizontal=正装(默认) / left=左侧装 / right=右侧装
-                                                 #   由 piper demo launch 读取并下发给机械臂驱动(agx_arm_ctrl_single),
-                                                 #   驱动通过 CAN 告知臂控制器,影响示教模式的重力补偿方向;
+  installation_pos: horizontal                   # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
+  speed_percent: 100                             # 机械臂运动速度百分比，范围 0~100
   ee_offset:                                     # 末端工具 frame(URDF 无 tool0 时用此偏移,运行时创建)
     parent_joint: joint6                         #   挂在哪个关节上
     xyz: [0.0, 0.0, 0.0]                         #   相对该关节的平移 [x, y, z] (m)
@@ -15,30 +13,30 @@ robot:
     default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ik:
-  enable_hard_delta_q_constraint: false          # 软约束:硬约束在初始目标远离当前位形时会把可行域变成空集导致 Infeasible 刷屏;平滑由 smooth_cost 保证
+  enable_hard_delta_q_constraint: true           # 是否启用单帧最大关节变化硬约束
   max_delta_q_rad: 0.1                           # 单帧最大关节变化 (rad),标量或按 nq 列表
   enable_psi_constraint: false                   # 是否启用 psi 肘部构型保持
   enable_elbow_side_penalty: false               # 是否启用肘部侧向惩罚
   singularity_weight: 0.02                       # 奇异性惩罚权重
 
 handle:                                          # 手柄桥接参数
-  zoom_factor: 1.0                               # 手柄位姿增量缩放系数
+  zoom_factor: 1.1                               # 手柄位姿增量缩放系数
 
 safety:
-  safety_frames:
+  safety_frames:                                 # 压缩了左右摆动（大概正负20度）的工作空间，避免碰撞
     wrist_safety_point: joint5
   virtual_walls: []
   workspace:
     frame: base_link
     type: box
     min:
-    - -0.322233359516
-    - -0.160924696922
-    - -0.075695610046
+    - -0.32194583416
+    - -0.149946143478
+    - -0.075695848465
     max:
-    - 0.277766640484
-    - 0.139075303078
-    - 0.624304389954
+    - 0.27805416584
+    - 0.150053856522
+    - 0.624304151535
     margin: 0.02
     protected_frames:
     - link3

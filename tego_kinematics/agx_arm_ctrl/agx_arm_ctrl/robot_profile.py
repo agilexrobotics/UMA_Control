@@ -7,10 +7,22 @@ No sign/offset: pure name mapping; direction/zero live in the hardware layer.
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import yaml
+
+
+INSTALLATION_POSITIONS = ("horizontal", "left", "right")
+INSTALLATION_POSITION_KEYS = ("default", "left", "right")
+
+
+def validate_installation_pos(value: Any, context: str = "installation_pos") -> str:
+    """Validate and return one physical arm installation orientation."""
+    if not isinstance(value, str) or value not in INSTALLATION_POSITIONS:
+        allowed = ", ".join(INSTALLATION_POSITIONS)
+        raise ValueError(f"{context} 必须为 {allowed}, got {value!r}")
+    return value
 
 
 @dataclass
@@ -88,9 +100,8 @@ class RobotProfile:
     arm_home_state: Dict[str, List[float]] = field(default_factory=dict)
     # 手柄桥接参数(tego_ros 节点),如 zoom_factor;由手柄 launch 读取
     handle: Dict[str, Any] = field(default_factory=dict)
-    # 底座安装朝向:horizontal(正装)/ left(左侧装)/ right(右侧装)
-    # piper 驱动专用(通过 CAN 下发,影响控制器示教模式重力补偿);nero 驱动无此能力
-    installation_pos: str = "horizontal"
+    # 通用物理安装朝向；可按通信 side 配置。支持的驱动还会用它配置重力补偿。
+    installation_pos: Union[str, Dict[str, str]] = "horizontal"
     enable_hard_delta_q_constraint: bool = True
     max_delta_q_rad: float = 0.15
     enable_psi_constraint: bool = False
@@ -147,6 +158,25 @@ class RobotProfile:
             raise ValueError("IK 关节角必须只包含有限数字")
         return [m.command_name for m in self.joints], q.tolist()
 
+    def installation_pos_for(self, side: str) -> str:
+        """Resolve the physical installation orientation for one routed arm."""
+        if side not in ("left", "right"):
+            raise ValueError(f"unsupported arm side: {side}")
+        if isinstance(self.installation_pos, str):
+            return validate_installation_pos(
+                self.installation_pos, "robot.installation_pos"
+            )
+        value = self.installation_pos.get(side)
+        if value is None:
+            value = self.installation_pos.get("default")
+        if value is None:
+            raise ValueError(
+                f"robot.installation_pos 缺少键: {side}(或 default)"
+            )
+        return validate_installation_pos(
+            value, f"robot.installation_pos.{side}"
+        )
+
 
 def _resolve_urdf_path(urdf_path: str):
     if urdf_path.startswith("package://"):
@@ -181,6 +211,31 @@ def _parse_ik(raw: dict, profile: RobotProfile) -> None:
     for key in ik_fields:
         if key in raw:
             setattr(profile, key, raw[key])
+
+
+def _parse_installation_pos(robot_raw: dict) -> Union[str, Dict[str, str]]:
+    if "installation_pos" not in robot_raw:
+        return "horizontal"
+
+    raw = robot_raw["installation_pos"]
+    if isinstance(raw, str):
+        return validate_installation_pos(raw, "robot.installation_pos")
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(
+            "robot.installation_pos 必须为 horizontal/left/right 或非空映射"
+        )
+
+    parsed = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or key not in INSTALLATION_POSITION_KEYS:
+            allowed = ", ".join(INSTALLATION_POSITION_KEYS)
+            raise ValueError(
+                f"robot.installation_pos 映射键必须为 {allowed}, got {key!r}"
+            )
+        parsed[key] = validate_installation_pos(
+            value, f"robot.installation_pos.{key}"
+        )
+    return parsed
 
 
 def _frame_exists(model, name: str) -> bool:
@@ -429,7 +484,7 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
         virtual_walls=virtual_walls,
         collision_pairs=[list(p) for p in (robot_raw.get("collision_pairs") or [])],
         handle=raw.get("handle") or {},
-        installation_pos=str(robot_raw.get("installation_pos", "horizontal")),
+        installation_pos=_parse_installation_pos(robot_raw),
     )
     _parse_ik(raw.get("ik") or {}, profile)
     _validate_home_state_lengths(profile)

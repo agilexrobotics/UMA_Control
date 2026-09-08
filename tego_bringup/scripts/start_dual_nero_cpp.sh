@@ -32,6 +32,8 @@ if [[ ! -f "${WORKSPACE_DIR}/install/setup.bash" ]]; then
   exit 1
 fi
 
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
+conda activate "${CONDA_ENV}"
 source /opt/ros/humble/setup.bash
 source "${WORKSPACE_DIR}/install/setup.bash"
 
@@ -50,7 +52,7 @@ if [[ -n "${CONDA_SITE}" && "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
     unset PYTHONPATH
   fi
 fi
-unset PYTHONNOUSERSITE
+export PYTHONNOUSERSITE=1
 
 cd "${WORKSPACE_DIR}"
 

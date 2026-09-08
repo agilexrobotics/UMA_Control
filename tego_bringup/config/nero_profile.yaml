@@ -2,6 +2,10 @@ robot:
   name: nero
   urdf_path: package://tego_description/urdf/nero/urdf/nero_description.urdf  # URDF 路径
   base_frame: base_link                            # IK 目标位姿的参考坐标系，默认base_link
+  installation_pos:                                # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
+    left: left
+    right: right
+  speed_percent: 100                               # 双臂运动速度百分比，范围 0~100
   ee_offset:                                       # 末端工具坐标系，URDF没有时用此偏移
     parent_joint: joint7                           # 挂在哪个关节上
     xyz: [0.0, 0.0, -0.023]                        # 相对该关节的平移 [x, y, z] (m)
@@ -39,17 +43,17 @@ safety:
     elbow_safety_point: joint4
     wrist_safety_point: joint5
   virtual_walls: []
-  workspace:
+  workspace:                                      # 压缩了左右摆动及向上摆动的工作空间，避免碰撞
     frame: base_link
     type: box
     min:
-    - -0.644569522142
-    - -0.267667008936
-    - -0.173729722202
+    - -0.594777235389
+    - -0.605503553152
+    - -0.199121564627
     max:
-    - 0.055430477858
-    - 0.432332991064
-    - 0.226270277798
+    - 0.205222764611
+    - 0.194496446848
+    - 0.300878435373
     margin: 0.02
     protected_frames:
     - ee

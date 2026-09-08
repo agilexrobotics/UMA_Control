@@ -7,7 +7,11 @@
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -15,6 +19,12 @@ from launch_ros.substitutions import FindPackageShare
 
 from agx_arm_ctrl.robot_profile import load_profile
 from tego_bringup.bridge_launch import bridge_wrapper_name
+
+
+def resolve_installation_pos(profile_path: str, side: str) -> str:
+    """Resolve the driver's physical installation value for the routed arm."""
+    profile = load_profile(str(Path(profile_path)), validate_robot=False)
+    return profile.installation_pos_for(side)
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -33,13 +43,9 @@ def generate_launch_description() -> LaunchDescription:
     def build(context):
         side_val = side.perform(context)
         backend_val = backend.perform(context)
-        # 安装朝向来自 profile(piper 专属):horizontal/left/right
-        installation_pos = "horizontal"
-        try:
-            profile = load_profile(str(Path(profile_path.perform(context))), validate_robot=False)
-            installation_pos = profile.installation_pos
-        except Exception as e:  # launch 期解析失败不阻塞整栈,沿用默认
-            print(f"[demo_piper] 读取 installation_pos 失败,默认 horizontal: {e}")
+        installation_pos = resolve_installation_pos(
+            profile_path.perform(context), side_val
+        )
         wrapper = bridge_wrapper_name("piper", side_val, backend_val)
         return [
             IncludeLaunchDescription(
@@ -94,19 +100,25 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "arm_port", default_value="right_arm",
+                "arm_port",
+                default_value="right_arm",
                 description="SocketCAN interface of the Piper arm.",
             ),
             DeclareLaunchArgument(
-                "port_name", default_value="right_tego",
+                "port_name",
+                default_value="right_tego",
                 description="SocketCAN interface of the handle.",
             ),
             DeclareLaunchArgument(
-                "side", default_value="right", choices=["left", "right"],
+                "side",
+                default_value="right",
+                choices=["left", "right"],
                 description="Arm/handle side.",
             ),
             DeclareLaunchArgument(
-                "backend", default_value="cpp", choices=["cpp", "python"],
+                "backend",
+                default_value="cpp",
+                choices=["cpp", "python"],
                 description="Handle bridge backend.",
             ),
             DeclareLaunchArgument("gripper_width_min", default_value="0.00"),

@@ -1,69 +1,53 @@
 # tego_control
 
-## 概述
+[English](#english) | [中文](#中文)
 
-`tego_control` 是基于 ROS 2 的示教器主从遥操集成包，使用底层的 [tego_sdk](https://gitlab.agilex.ai/sjq01/tego_sdk) 进行 CAN 通信和协议编解码，并在 `tego_ros` 节点中把手柄状态、关节命令、IMU 与机械臂驱动桥接起来。机械臂运动学、关节映射、回零目标和安全约束由机械臂参数统一配置，当前包含 Nero 与 Piper 示例配置文件。
+`tego_control` integrates a six-axis teaching handle with ROS 2. It provides
+the ROS bridge, Nero/Piper examples, profile-driven Pinocchio IK, and safety
+constraints. Low-level CAN communication is provided by [`tego_sdk`](https://github.com/agilexrobotics/tego_sdk).
 
----
+`tego_control` 将六轴示教器接入 ROS 2，提供 ROS 桥接、Nero/Piper 遥操示例、
+基于 profile 配置的 Pinocchio 逆运动学和安全约束。底层 CAN 通信由
+[`tego_sdk`](https://github.com/agilexrobotics/tego_sdk) 提供。
 
-## 仓库结构
+<a id="english"></a>
+## English
 
-本仓库与 `tego_sdk` 是两个独立 Git 仓库。集成运行时建议把它们放在同一个 ROS 2 工作空间：
+<details>
+<summary><strong>Workspace, dependencies and build</strong></summary>
 
-```text
-<workspace>/
-├── src/tego_sdk/        # 六轴通用示教器 SDK 仓库：C++/Python 通信
-└── src/tego_control/    # 本仓库：ROS 2 控制和 Nero/Piper 示例
-```
-
-本仓库包含的主要 ROS 包：
-
-|包|职责|
-|---|---|
-|`tego_msgs`|ROS 消息与 service 定义（手柄/传感器状态、编码器控制）|
-|`tego_ros`|SDK ↔ ROS 2 桥接、状态发布、控制转发；提供手柄与机械臂命令桥接|
-|`tego_bringup`|launch、CAN 配置脚本、Nero/Piper 示例入口、机械臂配置文件|
-|`tego_description`|URDF、网格、RViz 配置|
-|`tego_kinematics/agx_arm_ctrl`|Nero/AgileX 示例机械臂驱动、Pinocchio 遥操节点、夹爪/灵巧手控制|
-|`tego_kinematics/agx_arm_msgs`|示例机械臂、夹爪和灵巧手消息定义|
-
-当前 Nero 双臂示例链路：
+Place the two independent repositories in one ROS 2 workspace:
 
 ```text
-六轴示教器手柄 (left_tego / right_tego)
-  -> tego_ros
-  -> /left_handle_pose、/right_handle_pose
-  -> agx_arm_ctrl Pinocchio 遥操节点
-  -> /control/joint_states_{left,right}_raw
-  -> tego_ros（遥操开启时转发）
-  -> /control/move_js_{left,right}
-  -> Nero 示例机械臂 (left_arm / right_arm)
+~/tego/
+└── src/
+    ├── tego_control/
+    └── tego_sdk/
 ```
 
----
-
-## 快速开始
-
-### 1. 创建工作空间并克隆
+For a new workspace:
 
 ```bash
 mkdir -p ~/tego/src
 cd ~/tego/src
-git clone https://gitlab.agilex.ai/sjq01/tego_control.git
-git clone https://gitlab.agilex.ai/sjq01/tego_sdk.git
+git clone https://github.com/agilexrobotics/tego_control.git
+git clone https://github.com/agilexrobotics/tego_sdk.git
+cd ~/tego
 ```
 
-两个仓库需要位于同一个 ROS 2 工作空间中：
+| Package / directory | Responsibility |
+| --- | --- |
+| `tego_bringup` | Demo launches, CAN scripts and robot profiles |
+| `tego_ros` | C++ / Python handle bridges |
+| `tego_msgs` | Handle messages and control service definitions |
+| `tego_kinematics/agx_arm_ctrl` | Profile loading, IK and AGX example drivers |
+| `tego_kinematics/arm_safety_monitor` | Offline RViz safety-space editor |
+| `tego_description` | Example URDFs, meshes and RViz configuration |
+| `../tego_sdk` | Independent repository for the handle CAN protocol |
 
-```text
-~/tego/
-├── src/tego_sdk/        # C++ / Python 示教器 SDK
-└── src/tego_control/    # ROS 2 控制层和示例
-```
-
-### 2. 公共系统依赖
-
-C++ 和 Python 流程都需要 ROS 2 Humble、`colcon`、SocketCAN、Conda，以及 Pinocchio/CasADi 遥操环境。先安装系统依赖：
+ROS 2 Humble, colcon, SocketCAN, Eigen, Boost, KDL, and NLopt are required.
+The IK and example arm drivers also require a Python 3.10 environment with
+Pinocchio, CasADi, SciPy, and `pyAgxArm`.
 
 ```bash
 sudo apt update
@@ -74,651 +58,875 @@ sudo apt install -y \
   can-utils ethtool iproute2 \
   libboost-all-dev libeigen3-dev liborocos-kdl-dev \
   libnlopt-dev libnlopt-cxx-dev
-```
 
-两种 bridge 都会启动 `agx_arm_ctrl` 的 Python IK 节点，因此都需要 `tego` 环境。Conda 未初始化时（`conda: 未找到命令`）先手动加载：
-
-```bash
-CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"        # 按实际安装位置修改
-source "$CONDA_BASE/etc/profile.d/conda.sh"         # 已执行过 conda init 可跳过
-
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda create -n tego --override-channels -c conda-forge python=3.10 -y
 conda activate tego
 conda install --override-channels -c conda-forge \
-  "pinocchio=3.2.0" "casadi=3.6.7" scipy -y
+  "pinocchio=3.2.0" "casadi=3.6.7" scipy \
+  typing_extensions exceptiongroup -y
 python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
-  pyyaml opencv-python ur-rtde netifaces meshcat \
-  typing_extensions exceptiongroup
-```
-
-验证环境（激活 `tego` 后）：
-
-```bash
-python -c "import sys; print(sys.executable)"          # 应指向 tego 的 python
-python -c "import pinocchio, casadi, scipy; print('IK dependencies are ready')"
-```
-
-如果使用仓库内的 Nero/Piper 示例驱动，还需要把驱动依赖装进**同一个 conda 环境**（激活 `tego` 后）：
-
-```bash
-conda activate tego
+  pyyaml opencv-python ur-rtde netifaces meshcat
 python -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
-python -c "import pyAgxArm; print('pyAgxArm OK')"
 ```
 
-> **统一环境（重要）**：所有 Python 节点（机械臂示例驱动、遥操 IK、Python 桥接）都在 `tego` conda 环境中运行——launch 统一使用 `prefix=python3` 指向 conda 解释器。因此 pinocchio/casadi、pyAgxArm、python-can、tego_sdk 全部装进 `tego`，**不依赖系统 Python 的任何包**。安装前先确认 `python` 指向 conda：`python -c "import sys; print(sys.executable)"`。
-> `tego` 环境负责 IK、安全约束和示例驱动，不代表机械臂已经连接。真实机械臂是否能使能、回零和执行命令，取决于驱动层。
+Both bridge backends use Python IK, so both need the `tego` environment.
+Install IK and driver dependencies there; ROS 2 itself comes from the system
+installation. Check that `python` points to `envs/tego/bin/python`:
 
-### 3. 依赖与构建
+```bash
+python -c "import sys; print(sys.executable)"
+python -c "import pinocchio, casadi, scipy, pyAgxArm; print('IK and driver dependencies OK')"
+```
 
-#### 3.1 C++
-
-C++ 用户使用 `tego_ros_node` 作为手柄 bridge。它链接 `tego_sdk/c++`，**不需要**安装 Python `tego_sdk` 或 `python-can`。但仍然需要上一节的 `tego` 环境，因为 IK 节点是 Python 实现。
-
-在工作空间根目录构建 C++ 链路：
+Build both repositories. The explicit system Python path is for ROS build
+tools and message generation:
 
 ```bash
 cd ~/tego
 source /opt/ros/humble/setup.bash
-
 rosdep update
-rosdep install --from-paths src/tego_control src/tego_sdk --ignore-src -r -y
-
+rosdep install --from-paths src/tego_control src/tego_sdk \
+  --ignore-src -r -y
 colcon build \
   --base-paths src/tego_control src/tego_sdk \
   --symlink-install \
-  --cmake-args \
-    -DPython3_EXECUTABLE=/usr/bin/python3 \
-    -DBUILD_TESTING=OFF
-
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
 
-这一步会构建 `tego_sdk/c++`、`tego_ros` 以及控制层所需的 ROS 包。可以用下面的命令确认 C++ SDK 和 ROS 包已被发现：
-
-```bash
-colcon list | grep -E 'tego_sdk|tego_ros|tego_bringup|agx_arm_ctrl'
-ros2 pkg prefix tego_ros
-```
-
-#### 3.2. Python
-
-Python 用户使用 `tego_ros_py_node.py` 作为手柄 bridge。Python bridge 需要额外安装 `python-can` 和 `tego_sdk/python`：
+The Python bridge additionally needs:
 
 ```bash
 conda activate tego
 python -m pip install python-can
 python -m pip install -e ~/tego/src/tego_sdk/python
-python -c "import can, tego_sdk; print('Python SDK dependencies are ready')"
+python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
 ```
 
-Python 用户仍然需要构建 ROS 工作空间：`tego_ros` 的 ROS 包、launch、消息和控制节点都必须先安装；工作空间构建也会同时构建 `tego_sdk/c++`，这是 `tego_ros` 的 CMake 依赖。构建命令与 C++ 用户相同：
+The Python bridge also needs this ROS workspace build. The C++ bridge does
+not need `python-can` or the Python SDK. Check package discovery with
+`colcon list` and `ros2 pkg prefix tego_ros`.
+
+</details>
+
+<details>
+<summary><strong>CAN configuration</strong></summary>
+
+Run the following from the workspace root. Discover the USB-CAN adapters,
+update their `bus-info` values in
+`can_config.sh`, and activate the interfaces:
+
+```bash
+bash src/tego_control/tego_bringup/scripts/find_all_can_port.sh
+bash src/tego_control/tego_bringup/scripts/can_config.sh
+ip -details link show type can
+```
+
+| Interface | Device |
+| --- | --- |
+| `left_tego` / `right_tego` | Left / right teaching handle |
+| `left_arm` / `right_arm` | Left / right example arm driver |
+
+A single-arm setup only needs one pair, such as `right_tego + right_arm`.
+Enable the matching lines in `can_config.sh` and comment out unused devices;
+the current script enables the right pair. Dual-arm operation needs all four.
+The USB addresses are machine-specific; keep the bitrate at 1 Mbps.
+
+The optional `tego_bringup/udev/99-tego-can.rules` brings matching adapters up
+at 1 Mbps on insertion. It does not assign the logical names above; use
+`can_config.sh` for that.
+
+</details>
+
+<details>
+<summary><strong>Start and operate teleoperation</strong></summary>
+
+All four `start_*.sh` scripts automatically activate the `tego` Conda
+environment. Set `CONDA_BASE` when Conda is not installed under
+`~/miniconda3`; no manual `conda activate` is required.
+
+```bash
+# Nero dual arm
+bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
+
+# Piper single arm; the right route is the default
+bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
+
+# Left CAN pair / 左侧 CAN 接口
+SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh \
+  arm_port:=left_arm port_name:=left_tego
+```
+
+`SIDE` selects the single-arm ROS route. With left-side CAN names, also pass
+`arm_port:=left_arm port_name:=left_tego`; changing `SIDE` alone keeps the
+demo's right-side port defaults. Choose one bridge backend per interface.
+
+| Script setting | Default / use |
+| --- | --- |
+| `CONDA_BASE` | `~/miniconda3`; override for another Conda installation |
+| `WORKSPACE_DIR` | Auto-detected directory containing `install/setup.bash` |
+| `SIDE` | Piper only: `right` or `left` |
+| `LAUNCH_FILE` | Model's demo launch in `tego_bringup` |
+| Trailing `key:=value` | Forwarded to `ros2 launch` |
+
+For example, add `profile_path:=/absolute/path/my_profile.yaml` to a start
+command. Scripts load Conda, ROS and the workspace, and clean up matching
+stack processes on startup and exit, including Ctrl+C. This cleanup can also
+stop separately launched instances with matching process names; use direct
+launches for parallel debugging.
+
+For direct `ros2 launch`, prepare each terminal first:
+
+```bash
+cd ~/tego
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+conda activate tego
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export PYTHONNOUSERSITE=1
+```
+
+Then choose one entry point:
+
+```bash
+ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=cpp
+ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch tego_bringup demo_piper.launch.py
+ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python \
+  arm_port:=left_arm port_name:=left_tego
+```
+
+Set `start_arm:=false` when using an external arm driver. This only disables
+the repository's example driver.
+
+Double-click the inner side key to toggle teleoperation. Long-press it while
+teleoperation is off to initialize the handle and home the arm. Homing sends
+motion commands, so keep the path clear. The demo button timing is 0.30 s for
+a double press and 2.0 s for a long press. Trigger pressure is also used for
+gripper width in supported configurations.
+
+</details>
+
+<details>
+<summary><strong>Profiles and installation geometry</strong></summary>
+
+Example profiles are stored in `tego_bringup/config/`:
+
+| Profile | Default use |
+| --- | --- |
+| `nero_profile.yaml` | Side-mounted Nero dual arm |
+| `piper_profile.yaml` | Upright Piper single arm |
+
+`side` and `installation_pos` have separate responsibilities:
+
+- `side: left/right` selects topics, services, node names and the inner
+  handle button. CAN ports are separate launch arguments.
+- `installation_pos: horizontal/left/right` describes physical mounting.
+
+An upright arm connected through the right route therefore uses `side:=right`
+with this profile value:
+
+```yaml
+robot:
+  installation_pos: horizontal
+```
+
+This applies to Piper, Nero, and other arms. A dual-arm profile may select the
+installation per route:
+
+```yaml
+robot:
+  installation_pos:
+    left: left
+    right: right
+```
+
+A mapping may also provide `default`. Invalid values, or a selected side with
+no matching key or default, stop startup. A missing field defaults to
+`horizontal`. When migrating a side-mounted custom profile from v0.1.0,
+set `installation_pos` explicitly.
+
+Translation is mapped from handle `world` to arm `base_link`:
+
+| Installation | `world +x` | `world +y` | `world +z` |
+| --- | --- | --- | --- |
+| `horizontal` | `base +x` | `base +y` | `base +z` |
+| `left` | `base +y` | `base +z` | `base +x` |
+| `right` | `base -y` | `base -z` | `base +x` |
+
+The `left/right` mappings preserve the v0.1.0 Nero home-FK directions.
+`horizontal` prevents the home end-effector rotation from swapping translation
+axes. The correction changes translation only; orientation deltas retain the
+existing path. Piper also receives the same value for gravity compensation.
+
+`arm_home_state` remains the home command and FK reference; the live session
+origin comes from current joint feedback. Each list contains one arm's driver
+channels, with the first `nq` entries in URDF arm order. The bundled Piper
+profile has 6 entries; Nero has 10 per side (7 arm + 3 end-effector channels).
+These lengths must match the actual driver feedback used for homing.
+
+| Profile block | What to configure |
+| --- | --- |
+| `robot` | URDF, base/tool frames, locked joints, home state and mounting |
+| `ik` | Per-step joint change limit, posture and singularity penalties |
+| `handle` | `zoom_factor`: Nero 1.4, Piper 1.1 in the bundled profiles |
+| `safety` | Workspace box, virtual walls and protected points |
+
+The examples use `ik.max_delta_q_rad: 0.1`. It limits the joint change per IK
+step, not motor speed. `robot.speed_percent` in the current YAML is **not read
+by the demo launches**. To set speed, launch the example driver separately
+with `speed_percent:=30` and use `start_arm:=false` for bringup, as below.
+
+See the [Arm Adaptation Guide](机械臂适配指南.md) for complete profile and driver
+examples, including custom arms and grippers.
+
+</details>
+
+<details>
+<summary><strong>Runtime interfaces and arm integration</strong></summary>
+
+Main data path:
+
+```text
+Teaching-handle CAN
+  -> tego_ros
+  -> /left_handle_pose or /right_handle_pose
+  -> Pinocchio IK
+  -> /control/joint_states_{left,right}_raw
+  -> tego_ros, while teleoperation is enabled
+  -> /control/move_js_{left,right}
+  -> arm driver
+```
+
+| Interface | Type | Purpose |
+| --- | --- | --- |
+| `/left_handle_pose`, `/right_handle_pose` | `geometry_msgs/msg/PoseStamped` | Handle end pose |
+| `/feedback/joint_states_{left,right}` | `sensor_msgs/msg/JointState` | Live arm feedback |
+| `/control/joint_states_{left,right}_raw` | `sensor_msgs/msg/JointState` | Raw IK target |
+| `/control/move_js_{left,right}` | `sensor_msgs/msg/JointState` | Target forwarded to the driver |
+| `/left_teleop_enable`, `/right_teleop_enable` | `std_msgs/msg/Bool` | Teleoperation state |
+| `/left_teleop_trigger`, `/right_teleop_trigger` | `std_srvs/srv/Trigger` | Toggle teleoperation |
+
+An external driver must publish `/feedback/joint_states_{side}` and subscribe
+to `/control/move_js_{side}`. Joint values use radians. Joint naming,
+direction, zero offsets, enabling, grippers, and vendor transport belong to
+the driver.
+
+Fresh joint feedback is required before teleoperation starts. A feedback
+timeout stops the session and clears its installation mapping. Double-click
+the inner handle button to toggle teleoperation. Long-press it while disabled
+to initialize the handle and home the arm.
+
+Demo launch arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `backend` | `cpp` | Handle bridge implementation |
+| `side` | `right` for Piper | Single-arm communication route |
+| `profile_path` | Example profile | URDF, IK, mounting, and safety configuration |
+| `start_arm` | `true` | Start the example arm driver |
+| `start_teleop` | `true` | Start the IK teleoperator |
+| `gripper_width_min/max` | `0.00/0.07` | Gripper range in metres |
+| `pub_rate` | `200.0` | Bridge publication rate in Hz |
+| `log_level` | `info` | Bridge and example-driver logging |
+| `arm_port`, `port_name` | `right_arm`, `right_tego` | Piper arm and handle CAN ports |
+| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero arm CAN ports |
+| `left_port_name`, `right_port_name` | `left_tego`, `right_tego` | Nero handle CAN ports |
+
+</details>
+
+<details>
+<summary><strong>Separate launches and diagnostics</strong></summary>
+
+For a Piper on the right route, load the manual environment in each terminal
+and run these commands from the workspace root:
+
+```bash
+# Terminal 1: example driver / 终端 1：示例驱动
+ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py \
+  arm_type:=piper can_port:=right_arm topics_end:=_right \
+  installation_pos:=horizontal speed_percent:=30
+
+# Terminal 2: IK / 终端 2：IK
+ros2 launch agx_arm_ctrl teleop_right_arm.launch.py \
+  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml \
+  feedback_timeout_sec:=1.0
+
+# Terminal 3: handle bridge / 终端 3：示教器 bridge
+ros2 launch tego_bringup right_piper.launch.py port_name:=right_tego \
+  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml
+```
+
+Use `right_piper_python.launch.py` for the Python bridge. For Nero, the
+corresponding driver/IK entries are `start_double_arm.launch.py` and
+`teleop_double_arm.launch.py`; a bridge-only demo uses
+`start_arm:=false start_teleop:=false`.
+
+The low-level IK launches require `profile_path`; the single-arm entry also
+accepts `side` and `node_name`. `feedback_timeout_sec` defaults to 1.0 s.
+Keep the driver mounting value consistent with the profile.
+
+`run_single_node.launch.py` is the advanced C++ bridge entry. It requires
+`arm_home_state` as a comma-separated string and explicit topic mappings.
+Its defaults differ from the model wrappers: `port_name=can0`,
+`gripper_width_max=0.10`, `zoom_factor=2.0`, `use_pose_dt_zoom=false` and
+`use_trigger_pose=false`. Demo wrappers supply the model geometry and enable
+the last two options. Use the [adaptation example](机械臂适配指南.md) when
+constructing your own bridge launch.
+
+</details>
+
+<details>
+<summary><strong>Handle telemetry, services and link checks</strong></summary>
+
+| Handle suffix | Type | Useful fields |
+| --- | --- | --- |
+| `/joint` | `sensor_msgs/msg/JointState` | Handle joints, not arm feedback |
+| `/imu` | `sensor_msgs/msg/Imu` | Orientation, angular velocity, acceleration |
+| `/handle_state` | `tego_msgs/msg/HandleState` | `joystick_x/y`, `trigger_press_percentage`, key events and receive counts |
+| `/mt_sensor_status` | `tego_msgs/msg/MtSensorStatus` | `name`, `data`, `receive_count`; each sensor has `angle_deg/rad`, `voltage_x/y` |
+
+Prefix these with `/tego_l` or `/tego_r`, for example `/tego_r/handle_state`.
+A connected CAN socket alone does not prove data is arriving; inspect receive
+counts and topic rates.
+
+| Service suffix | Type | Action |
+| --- | --- | --- |
+| `/reset_pose` | `std_srvs/srv/Empty` | Recapture the handle pose reference |
+| `/reset_control` | `tego_msgs/srv/ResetControl` | Encoder reset: `reset_mode` 0 = zero, 1 = factory |
+| `/enable_handle_motor` | `std_srvs/srv/SetBool` | Start / stop handle motor |
+| `/enable_reverse` | `std_srvs/srv/SetBool` | Change handle base reversal |
+
+These services also use `/tego_l` or `/tego_r`. They are distinct from the IK
+services `/left_teleop_trigger` and `/right_teleop_trigger`, which **toggle**
+the state on each call. Reset and homing are different operations.
+
+Read-only checks for the right route (replace `right` / `tego_r` for the left):
+
+```bash
+ros2 topic hz /right_handle_pose
+ros2 topic echo /tego_r/handle_state --once
+ros2 topic echo /feedback/joint_states_right --once
+ros2 topic echo /right_teleop_enable --once
+ros2 topic echo /control/joint_states_right_raw --once
+ros2 topic echo /control/move_js_right --once
+ros2 service list
+```
+
+The last two topics may be quiet while teleoperation is off. Trace handle
+pose → feedback and enable state → raw IK output → final command.
+The bridge also sends homing commands while teleoperation is disabled.
+
+</details>
+
+<details>
+<summary><strong>Safety-space editor</strong></summary>
+
+Edit profile workspace and virtual-wall constraints offline:
+
+```bash
+ros2 launch arm_safety_monitor safety_monitor.launch.py
+ros2 launch arm_safety_monitor safety_monitor.launch.py \
+  profile_name:=nero_profile.yaml
+```
+
+The launch starts RViz, `robot_state_publisher`, `joint_state_publisher_gui`
+and the editor. It loads the URDF from the profile; no arm or CAN feedback is
+needed. InteractiveMarkers uses `/arm_safety/update`.
+
+1. Set RViz **Fixed Frame** to `robot.base_frame` (normally `base_link`).
+2. Move the joint GUI sliders to inspect arm poses.
+3. Right-click the green base marker to create a Box or Plane. Existing
+   objects have the same editing menu.
+4. Drag a Box to move its centre; use its menu to resize or delete it.
+5. Move a Plane and adjust its green normal arrow. The wall menu can flip
+   the normal. Check `keep_side` and the protected frames in the profile.
+6. Choose **Save profile**, then restart the teleoperation node to apply it.
+
+Saving atomically updates the `safety` block and preserves other blocks and
+their comments. Source profiles are preferred; installed package data is the
+fallback. Use `TEGO_PROFILE_DIR` to choose a writable directory. The Box menu
+step is controlled by `box_resize_step` (0.05 m); `plane_size` (0.8 m) changes
+only the displayed wall size. The constraint is an infinite plane.
+
+Constraints apply to the origins of `protected_frames`, not every robot link.
+If the profile uses `tool0` instead of a generated `ee` frame, also update the
+editor's new-object default `protected_frames: [ee]` before using that profile.
+
+</details>
+
+<details>
+<summary><strong>Troubleshooting</strong></summary>
+
+Before connecting motion output, inspect the IK target in the visualization.
+Then test at low hardware speed: verify all three translation axes, no
+first-frame jump, orientation behavior and Piper gravity compensation.
+
+| Symptom | Check |
+| --- | --- |
+| No CAN data | `bus-info`, 1 Mbps bitrate, and `ip -details link show type can` |
+| No motion | Teleop enable, live feedback, raw target, and `move_js` topics |
+| Session stops immediately | Feedback rate and `feedback_timeout_sec` |
+| Upright x/z are swapped | `installation_pos: horizontal` and the current install space |
+| IK is infeasible | URDF frames, limits, workspace, walls, collisions, and `zoom_factor` |
+| RViz has missing TF | URDF, `base_frame`, state publishers, and Fixed Frame |
+
+For `Infeasible_Problem_Detected`, first confirm the loaded profile and URDF
+frames. Then check joint limits, the Box bounds/margin, wall normal/keep side
+and protected points; inspect `wall_dist` in the logs. Reduce handle scaling
+and restart from a reachable pose. `collision_pairs` checks self-collision
+after solving; it is not an Opti hard constraint.
+
+For import failures, inspect `which python3` and rerun the dependency checks in
+the `tego` environment. Rebuild and source `install/setup.bash` if ROS packages
+or updated launch files are missing. Use hardware speed limits and the arm's
+own stop mechanism during commissioning.
+
+</details>
+
+<a id="中文"></a>
+## 中文
+
+<details>
+<summary><strong>工作空间、依赖与构建</strong></summary>
+
+`tego_control` 和 `tego_sdk` 是两个独立 Git 仓库，建议放在同一个 ROS 2 工作空间：
+
+```text
+~/tego/
+└── src/
+    ├── tego_control/
+    └── tego_sdk/
+```
+
+首次创建工作空间：
+
+```bash
+mkdir -p ~/tego/src
+cd ~/tego/src
+git clone https://github.com/agilexrobotics/tego_control.git
+git clone https://github.com/agilexrobotics/tego_sdk.git
+cd ~/tego
+```
+
+| 包 / 目录 | 用途 |
+| --- | --- |
+| `tego_bringup` | 示例 launch、CAN 脚本和机械臂 profile |
+| `tego_ros` | C++ / Python 示教器 bridge |
+| `tego_msgs` | 手柄消息和控制服务定义 |
+| `tego_kinematics/agx_arm_ctrl` | Profile 加载、IK 和 AGX 示例驱动 |
+| `tego_kinematics/arm_safety_monitor` | RViz 离线安全空间编辑器 |
+| `tego_description` | 示例 URDF、mesh 和 RViz 配置 |
+| `../tego_sdk` | 独立仓库，提供示教器 CAN 协议 |
+
+系统需要 ROS 2 Humble、colcon、SocketCAN、Eigen、Boost、KDL 和 NLopt。IK
+与示例机械臂驱动还需要 Python 3.10、Pinocchio、CasADi、SciPy 和 `pyAgxArm`。
+
+```bash
+sudo apt update
+sudo apt install -y \
+  python3-colcon-common-extensions python3-colcon-recursive-crawl \
+  python3-rosdep python3-catkin-pkg python3-pip \
+  python3-numpy python3-scipy python3-tk python3-matplotlib \
+  can-utils ethtool iproute2 \
+  libboost-all-dev libeigen3-dev liborocos-kdl-dev \
+  libnlopt-dev libnlopt-cxx-dev
+
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+conda create -n tego --override-channels -c conda-forge python=3.10 -y
+conda activate tego
+conda install --override-channels -c conda-forge \
+  "pinocchio=3.2.0" "casadi=3.6.7" scipy \
+  typing_extensions exceptiongroup -y
+python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
+  pyyaml opencv-python ur-rtde netifaces meshcat
+python -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
+```
+
+两种 bridge 都使用 Python IK，因此都需要 `tego` 环境。IK 和驱动依赖安装在该
+环境中，ROS 2 使用系统安装。确认 `python` 指向 `envs/tego/bin/python`：
+
+```bash
+python -c "import sys; print(sys.executable)"
+python -c "import pinocchio, casadi, scipy, pyAgxArm; print('IK and driver dependencies OK')"
+```
+
+构建两个仓库；显式指定的系统 Python 用于 ROS 构建工具和消息生成：
 
 ```bash
 cd ~/tego
 source /opt/ros/humble/setup.bash
 rosdep update
-rosdep install --from-paths src/tego_control src/tego_sdk --ignore-src -r -y
+rosdep install --from-paths src/tego_control src/tego_sdk \
+  --ignore-src -r -y
 colcon build \
   --base-paths src/tego_control src/tego_sdk \
   --symlink-install \
-  --cmake-args \
-    -DPython3_EXECUTABLE=/usr/bin/python3 \
-    -DBUILD_TESTING=OFF
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
 
-`start_*_python.sh` 会自动激活 `tego`，并把 `src/tego_sdk/python` 加入 `PYTHONPATH` 作为源码导入兜底；手动启动 Python launch 时，请确保当前终端已激活 `tego` 且能导入 `can`、`tego_sdk`。
-
----
-
-## 使用说明
-
-### 1. 激活 CAN 模块（C++ / Python 共用）
-
-启动任何 bridge 前，先把 USB-CAN 配置为项目约定的逻辑接口，并设置为 **1 Mbps**。脚本位于 `tego_bringup/scripts/`：
+Python bridge 还需安装：
 
 ```bash
-cd ~/tego
+conda activate tego
+python -m pip install python-can
+python -m pip install -e ~/tego/src/tego_sdk/python
+python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
+```
+
+Python bridge 同样需要构建 ROS 工作空间；C++ bridge 不需要 `python-can` 和
+Python SDK。可用 `colcon list` 和 `ros2 pkg prefix tego_ros` 检查包是否被发现。
+
+</details>
+
+<details>
+<summary><strong>CAN 配置</strong></summary>
+
+在工作空间根目录查找 USB-CAN，更新 `can_config.sh` 中的 `bus-info`，再启动接口：
+
+```bash
 bash src/tego_control/tego_bringup/scripts/find_all_can_port.sh
-# 根据输出的 USB bus-info，修改 can_config.sh 中的 USB 地址
 bash src/tego_control/tego_bringup/scripts/can_config.sh
 ip -details link show type can
 ```
 
-`can_config.sh` 会创建以下逻辑接口；执行配置脚本需要 `sudo` 权限：
+| 接口名 | 设备 |
+| --- | --- |
+| `left_tego` / `right_tego` | 左 / 右示教器 |
+| `left_arm` / `right_arm` | 左 / 右示例机械臂驱动 |
 
-|逻辑接口|用途|
-|---|---|
-|`left_tego` / `right_tego`|左 / 右主端手柄|
-|`left_arm` / `right_arm`|左 / 右从臂驱动|
+单臂只需一对接口，例如 `right_tego + right_arm`。在 `can_config.sh` 中启用对应
+行，注释未连接的设备；当前脚本启用右侧一对，双臂需要启用四路。USB 地址按本机
+修改，bitrate 保持 1 Mbps。
 
-可选地，将 `tego_bringup/udev/99-tego-can.rules` 安装到 `/etc/udev/rules.d/`，使 USB-CAN 的 bus-info 在热插拔后保持稳定。
+可选的 `tego_bringup/udev/99-tego-can.rules` 会在插入匹配设备时以 1 Mbps 启动
+接口。它不分配上述逻辑名称，命名仍由 `can_config.sh` 完成。
 
-### 2. C++ 流程
+</details>
 
-C++ bridge 节点为 `tego_ros_node`。C++ 和 Python bridge **只能二选一**，不要在同一组手柄/CAN 接口上同时启动。
+<details>
+<summary><strong>启动与手柄操作</strong></summary>
 
-#### Nero 双臂
-
-推荐使用已经移动到 `tego_bringup/scripts/` 的启动脚本：
+四个 `start_*.sh` 会自动激活 `tego` Conda 环境，无需手动执行
+`conda activate`。如果 Conda 不在 `~/miniconda3`，启动时设置 `CONDA_BASE`。
 
 ```bash
-cd ~/tego
+# Nero 双臂
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
-```
-
-脚本默认启动 `demo_nero_bringup.launch.py`，对应链路为：
-
-```text
-left_tego / right_tego -> tego_ros_node -> Nero 双臂控制层
-left_arm  / right_arm  -> Nero 用户驱动或示例驱动
-```
-
-如果需要覆盖 launch 参数，可以直接追加 ROS launch 参数：
-
-```bash
-bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh \
-  left_arm_port:=left_arm right_arm_port:=right_arm
-```
-
-#### Piper 单臂
-
-Piper C++ 脚本通过 `SIDE` 选择左右侧，默认是右臂：
-
-```bash
-cd ~/tego
-# 默认右臂
-bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
-
-# 左臂
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
-```
-
-不使用脚本时，请先 source ROS 2 和工作空间，再直接启动对应入口：
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/tego/install/setup.bash
-
-# 右臂(默认)
-ros2 launch tego_bringup demo_piper.launch.py
-# 左臂
-ros2 launch tego_bringup demo_piper.launch.py side:=left
-```
-
-使用自己的机械臂驱动时，关闭仓库内示例驱动：
-
-```bash
-ros2 launch tego_bringup demo_piper.launch.py \
-  start_arm:=false \
-  arm_port:=left_arm
-```
-
-#### C++ 流程的分层调试
-
-需要拆分节点调试时，可以分别启动示例驱动、IK 和 C++ bridge：
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/tego/install/setup.bash
-
-ros2 launch agx_arm_ctrl start_double_arm.launch.py
-conda activate tego
-ros2 launch agx_arm_ctrl teleop_double_arm.launch.py \
-  profile_path:=$(ros2 pkg prefix tego_bringup)/share/tego_bringup/config/nero_profile.yaml
-ros2 launch tego_bringup demo_nero_bringup.launch.py start_arm:=false start_teleop:=false
-```
-
-### 3. Python 流程
-
-Python bridge 节点为 `tego_ros_py_node.py`。启动前确认：
-
-```bash
-conda activate tego
-python -c "import can, tego_sdk; print('Python SDK dependencies are ready')"
-```
-
-#### Nero 双臂
-
-```bash
-cd ~/tego
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
-```
 
-脚本默认以 Python 后端启动 `demo_nero_bringup.launch.py`。如果直接使用 launch，请先 source 工作空间并激活环境：
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/tego/install/setup.bash
-conda activate tego
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
-```
-
-#### Piper 单臂
-
-Python Piper 脚本同样通过 `SIDE` 选择左右侧，默认是右臂：
-
-```bash
-cd ~/tego
-# 默认右臂
+# Piper 单臂，默认右侧通信链路
+bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
 bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
 
-# 左臂
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
+# Left CAN pair / 左侧 CAN 接口
+SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh \
+  arm_port:=left_arm port_name:=left_tego
 ```
 
-也可以直接启动：
+`SIDE` 选择单臂 ROS 路由。使用左侧 CAN 名称时还需传入
+`arm_port:=left_arm port_name:=left_tego`，只改 `SIDE` 会保留 demo 的右侧端口
+默认值。同一接口选择一种 bridge 即可。
+
+| 脚本设置 | 默认值 / 用途 |
+| --- | --- |
+| `CONDA_BASE` | `~/miniconda3`；可指定其他 Conda 安装目录 |
+| `WORKSPACE_DIR` | 自动查找含 `install/setup.bash` 的工作空间 |
+| `SIDE` | 仅 Piper：`right` 或 `left` |
+| `LAUNCH_FILE` | `tego_bringup` 中对应机型的 demo launch |
+| 末尾的 `key:=value` | 透传给 `ros2 launch` |
+
+例如在启动命令末尾添加 `profile_path:=/绝对路径/my_profile.yaml`。脚本会加载
+Conda、ROS 和工作空间，并在启动前及退出时清理匹配的进程，支持 Ctrl+C 退出。
+清理也可能结束单独启动的同名实例；并行调试时使用下面的直接 launch。
+
+手动执行 `ros2 launch` 前，每个终端先加载环境：
 
 ```bash
-source /opt/ros/humble/setup.bash
-source ~/tego/install/setup.bash
+cd ~/tego
+CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
+source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate tego
-ros2 launch tego_bringup demo_piper.launch.py backend:=python             # 右臂
-ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python  # 左臂
-```
-
-使用自有 Piper 驱动时：
-
-```bash
-ros2 launch tego_bringup demo_piper.launch.py \
-  start_arm:=false \
-  arm_port:=left_arm
-```
-
-> `demo_piper.launch.py` 默认启动仓库内的 Piper 示例驱动；`start_arm:=false` 只关闭该示例驱动，不会替用户启动或适配厂商驱动。用户驱动仍需发布 `/feedback/joint_states_left`（或 right），并订阅 `/control/move_js_left`（或 right）。
-
-### 4. 启动脚本与调试约定
-
-当前启动脚本全部位于 `tego_bringup/scripts/`：
-
-```text
-start_dual_nero_cpp.sh
-start_dual_nero_python.sh
-start_single_piper_cpp.sh
-start_single_piper_python.sh
-```
-
-四个脚本都会自动 source ROS 2 和工作空间、激活 `tego`，并在退出时清理本次启动的控制进程。Piper 脚本支持 `SIDE=left/right`；Python 脚本还支持 `LAUNCH_FILE` 覆盖默认入口，所有脚本支持 `WORKSPACE_DIR` 和 `CONDA_BASE`：
-
-```bash
-WORKSPACE_DIR=~/tego CONDA_BASE=~/miniconda3 \
-  SIDE=left bash ~/tego/src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
-```
-
-停止流程使用 `Ctrl+C`。不要同时运行 C++ 和 Python bridge，也不要让两个启动脚本争用同一组 CAN 接口。
-
-### 5. 控制层与底层驱动边界
-
-本仓库不实现各品牌机械臂的 SDK、CAN、串口或 EtherCAT 适配。接入其他机械臂时，驱动层由用户自行开发；本仓库只约定 ROS topic、消息、配置文件和 launch 接口。用户驱动至少需要：
-
-```text
-发布  /feedback/joint_states_left（或 right）
-订阅  /control/move_js_left（或 right）
-```
-
-关节反馈和命令使用 `sensor_msgs/msg/JointState`，arm 关节单位为 rad。厂商 SDK 初始化、关节名/方向/零位转换、使能、夹爪和额外关节处理都属于用户驱动层。接入其他机械臂前请阅读：[机械臂适配指南](机械臂适配指南.md)。
-
-### 6. 遥操手柄操作说明
-
-手柄内侧按钮（例子：左手柄即为右侧按钮，右手柄即为左侧按钮）交互逻辑：
-
-|动作|功能描述|
-|:---|:---|
-|**双击**|**开启/关闭遥操，默认关闭**|
-|**长按**|**非遥操模式下，初始化示教器和机械臂回零**|
-
-### 7. 机械臂参数
-
-机械臂配置文件位于 `tego_bringup/config/`，当前预设**侧装 Nero 双臂**和**正装 Piper 单臂**两份配置：
-
-|文件|用途|
-|---|---|
-|`nero_profile.yaml`|侧装 Nero 双臂|
-|`piper_profile.yaml`|正装 Piper 单臂|
-
-`robot.arm_home_state` 是回零命令的目标值列表，不是 URDF 自由度定义。列表长度决定回零命令包含的关节/末端通道数量，必须与驱动反馈或命令 `JointState.position` 的长度一致；列表元素顺序也必须与驱动 `JointState.position` 的顺序一致。它不会自动增加或减少 URDF 中的 arm 关节。
-
-单臂配置示例：
-
-```yaml
-robot:
-  arm_home_state:
-    # 单臂：default 对应当前单臂的全部回零通道
-    default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-```
-
-双臂配置示例：
-
-```yaml
-robot:
-  arm_home_state:
-    # 双臂：left/right 分别对应一侧，不能填写两侧通道数之和
-    left: [0.1, 1.5708, -1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
-    right: [-0.1, 1.5708, 1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
-```
-
-例如 Piper 当前 `default` 长度为 6；Nero 双臂每个 `left/right` 列表长度为 10，其中前 7 个是 arm 关节，后 3 个是夹爪/末端通道。具体通道数量和顺序以你的驱动实际发布/接收的 `JointState` 为准。
-
-### 8. 启动参数
-
-#### `demo_nero_bringup.launch.py`（C++ bridge）
-
-|参数|类型|默认值|说明|
-|---|---|---|---|
-|`left_arm_port`|string|`left_arm`|左从臂 SocketCAN 接口名|
-|`right_arm_port`|string|`right_arm`|右从臂 SocketCAN 接口名|
-|`left_port_name`|string|`left_tego`|左手柄 SocketCAN 接口名|
-|`right_port_name`|string|`right_tego`|右手柄 SocketCAN 接口名|
-|`gripper_width_min`|float|`0.00`|夹爪宽度下限 (m)|
-|`gripper_width_max`|float|`0.07`|夹爪宽度上限 (m)|
-|`pub_rate`|float|`200.0`|桥接节点发布频率 (Hz)|
-|`log_level`|string|`info`|日志级别|
-|`start_arm`|bool|`true`|是否启动机械臂驱动|
-|`start_teleop`|bool|`true`|是否启动 Pinocchio 遥操节点|
-
-#### `demo_nero_bringup.launch.py`（C++/Python bridge 二合一）
-
-`backend:=cpp/python` 选择桥接实现（默认 cpp）；其余参数与 C++ 入口一致，默认 CAN 接口为 `left_tego/right_tego` 和 `left_arm/right_arm`。
-
-#### `demo_piper.launch.py`（Piper 单臂）
-
-`side:=left/right`（默认 right）、`backend:=cpp/python`（默认 cpp）；CAN 接口用 `arm_port`（默认 `right_arm`）、`port_name`（默认 `right_tego`）。支持：
-
-|参数|类型|默认值|说明|
-|---|---|---|---|
-|`profile_path`|string|`piper_profile.yaml`|Piper 的 URDF/IK/安全约束 profile|
-|`start_arm`|bool|`true`|是否启动仓库内 Piper 示例驱动；使用自有驱动时设为 `false`|
-|`start_teleop`|bool|`true`|是否启动 Pinocchio 遥操节点|
-|`gripper_width_min` / `gripper_width_max`|float|`0.00` / `0.07`|手柄夹爪宽度映射范围 (m)，实际执行由驱动负责|
-
-> 低层 `teleop_double_arm.launch.py`、`run_single_node.launch.py` 适合拆分调试和二次集成；日常使用优先选择上面的 `demo_*` 入口。自定义机械臂驱动不要求修改 `agx_arm_ctrl`，只需按[机械臂适配指南](机械臂适配指南.md)提供接口。
-
-#### `teleop_double_arm.launch.py`（低层遥操节点）
-
-|参数|类型|默认值|说明|
-|---|---|---|---|
-|`profile_path`|string|无（必填）|机器人 profile YAML 路径；独立启动时必须显式传入|
-
-> 高层 `demo_nero_bringup.launch.py`、`left_arm.launch.py`、`right_arm.launch.py` 会自动选择 `nero_profile.yaml`。低层 launch 不默认查找 `tego_bringup`，因此不会形成反向包依赖。
-
-#### `run_single_node.launch.py`（单手柄节点高级参数）
-
-|参数|类型|默认值|说明|
-|---|---|---|---|
-|`port_name`|string|`can0`|SocketCAN 接口名|
-|`node_name`|string|`tego_ros_node`|节点名（影响 topic 前缀，例如 `tego_l` / `tego_r`）|
-|`pika_pose_topic`|string|`/pika_pose`|主端位姿输出 topic（会被重映射到 `/left_handle_pose` 等）|
-|`remote_joint_topic_in`|string|`/joint_states_raw`|遥操 IK 输入 topic（Nero 链路里是 `/control/joint_states_{left,right}_raw`）|
-|`remote_joint_topic_out`|string|`/joint_states`|最终关节命令输出 topic（Nero 链路里是 `/control/move_js_{left,right}`）|
-|`remote_joint_single_topic`|string|`joint_states_single`|机械臂单臂反馈 topic（remap 到 `/feedback/joint_states_{left,right}`）|
-|`teleop_enable_topic`|string|`teleop_enable`|遥操开关 topic（remap 到 `/left_teleop_enable` 等）|
-|`remote_service_name`|string|`teleop_trigger`|遥操触发 service（remap 到 `left_teleop_trigger` 等）|
-|`arm_home_state`|string|由 robot profile 提供|非遥操状态下回零目标值列表 (rad)；元素数量必须与桥接节点反馈/命令 `JointState.position` 的通道数量一致，顺序也必须一致。它不会自动定义 URDF 的 arm DOF；双臂时 `left`/`right` 分别对应一侧。|
-|`imu_zero_rpy`|string|`0, 0, 0`|手柄 IMU 零位 RPY (deg)|
-|`base_to_imu_roll` / `_pitch` / `_yaw`|float|`93.0` / `5.0` / `-6.0`|手柄基座到 IMU 的 RPY 偏移 (deg)|
-|`gripper_length`|float|`0.14`|末端执行器长度 (m)，用于位姿补偿|
-|`zoom_factor`|float|`2.0`|位姿缩放系数|
-|`angle_value`|float|`0.35`|手柄偏角阈值 (rad)|
-|`is_nero`|bool|`false`|是否使用 Nero 示例机械臂|
-|`nero_gripper_topic_name`|string|`gripper_states`|Nero 夹爪控制 topic|
-|`check_get`|bool|`true`|启动时等待拿到有效状态|
-|`wait_feedback`|bool|`true`|下发命令前等待机械臂反馈|
-|`publish_sim_joint`|bool|`true`|是否发布 `/joint_states_single` 模拟关节状态|
-|`use_piper_mode`|bool|`false`|使用 Piper 模式（影响 seg 缩放语义）|
-|`handle_seg0`|double[]|`[0, 0, 0.123, 0, 0, 0]`|手柄 joint_base→joint0 变换 [x,y,z,r,p,y]，**出厂标定，默认无需修改**|
-|`handle_seg1`|double[]|`[0, 0, 0, 1.5708, -0.1359, 3.1416]`|手柄 joint0→joint1 变换，**出厂标定，默认无需修改**|
-|`handle_seg2`|double[]|`[0.28503, 0, 0, 0, 0, -1.7939]`|手柄 joint1→joint2 变换，**出厂标定，默认无需修改**|
-|`handle_seg3`|double[]|`[-0.022, -0.25075, 0, 1.5708, 0, 0]`|手柄 joint2→joint3 变换，**出厂标定，默认无需修改**|
-|`use_pose_dt_zoom`|bool|`false`|基于 dt 的位姿缩放（避免抖动）|
-|`use_trigger_pose`|bool|`false`|扳机按下后才发送位姿|
-|`angle_reverse` / `base_reverse` / `imu_reverse`|bool|`false` / `false` / `false`|关节/基座/IMU 反转开关|
-|`show_imu_data`|bool|`false`|日志里打印 IMU 调试数据|
-
-> 所有参数都可以在 launch 命令行用 `key:=value` 覆盖，例如 `ros2 launch tego_bringup demo_nero_bringup.launch.py left_port_name:=can_l`。
-
----
-
-## ROS 2 话题与服务
-
-### 手柄节点（命名空间前缀 `tego_l` / `tego_r`）
-
-#### `/tego_l/imu` & `/tego_r/imu`
-
-消息类型：`sensor_msgs/Imu`
-
-|字段|类型|说明|
-|---|---|---|
-|`orientation`|`geometry_msgs/Quaternion`|手柄姿态四元数（经基座偏移和 IMU 零位校正）|
-|`angular_velocity`|`geometry_msgs/Vector3`|角速度 (rad/s)|
-|`linear_acceleration`|`geometry_msgs/Vector3`|线加速度 (m/s²)|
-
-#### `/tego_l/handle_state` & `/tego_r/handle_state`
-
-消息类型：`tego_msgs/HandleState`
-
-|字段|类型|说明|
-|---|---|---|
-|`joystick_x` / `joystick_y`|`int32`|摇杆 X / Y 原始值|
-|`trigger_press_percentage`|`int32`|扳机按压百分比 (0~100)|
-|`key1_click_type` / `key2_click_type`|`uint8`|按键 1 / 2 点击类型（单击 / 双击 / 长按）|
-|`handle_receive_count`|`uint32`|手柄报文接收计数|
-|`key1_receive_count` / `key2_receive_count`|`uint32`|按键 1 / 2 接收计数|
-
-#### `/tego_l/mt_sensor_status` & `/tego_r/mt_sensor_status`
-
-消息类型：`tego_msgs/MtSensorStatus`
-
-|字段|类型|说明|
-|---|---|---|
-|`name`|`string[]`|编码器/传感器名称列表|
-|`data`|`SensorData[]`|与 `name` 对应的传感器数据|
-|`receive_count`|`uint32[]`|与 `name` 对应的接收计数|
-
-其中 `SensorData`：
-
-|字段|类型|说明|
-|---|---|---|
-|`angle_deg`|`float64`|传感器角度 (deg)|
-|`angle_rad`|`float64`|传感器角度 (rad)|
-|`voltage_x` / `voltage_y`|`float64`|传感器供电/原始电压|
-
-#### `/tego_l/joint` & `/tego_r/joint`
-
-消息类型：`sensor_msgs/JointState`，由 SDK 解码后的手柄侧关节状态。
-
-### 主从位姿
-
-#### `/left_handle_pose` & `/right_handle_pose`
-
-消息类型：`geometry_msgs/PoseStamped`
-
-|字段|类型|说明|
-|---|---|---|
-|`pose.position`|`geometry_msgs/Point`|主端手柄位置 (m)|
-|`pose.orientation`|`geometry_msgs/Quaternion`|主端手柄姿态（四元数）|
-
-`tego_ros` 把内部 `/pika_pose` 重映射到这两个 topic。
-
-### 关节命令链路
-
-#### `/control/joint_states_left_raw` & `/control/joint_states_right_raw`
-
-消息类型：`sensor_msgs/JointState`
-
-遥操节点（`agx_arm_ctrl/teleop_single_arm_node.py`）发布；`tego_ros` 订阅，作为未滤波的关节目标。
-
-#### `/control/move_js_left` & `/control/move_js_right`
-
-消息类型：`sensor_msgs/JointState`
-
-`tego_ros` 在遥操开启时把 `/control/joint_states_*_raw` 转发到这个 topic，机械臂驱动订阅。
-
-> 该链路同样适用于 `agx_arm_ctrl` 暴露的其他控制 topic，例如 `/control/move_j{_left/_right}`、`/control/move_p{_left/_right}`、`/control/move_mit{_left/_right}`、`/control/gripper{_left/_right}` 等，详细字段见 [agx_arm_ros README](https://github.com/agilexrobotics/agx_arm_ros)。
-
-### 机械臂反馈
-
-#### `/feedback/joint_states_left` & `/feedback/joint_states_right`
-
-消息类型：`sensor_msgs/JointState`，由仓库示例驱动或用户自己的机械臂驱动发布。
-
-遥操开启前必须先收到实时反馈；遥操首次建立参考位姿时，通过这份反馈计算当前末端 FK，并以当前机械臂姿态作为遥操起点。反馈超过超时时间后，遥操会自动停止，避免继续使用过期关节状态。
-
-`/feedback/tcp_pose{_left/_right}`、`/feedback/arm_status{_left/_right}`、`/feedback/arm_ctrl_states{_left/_right}`、`/feedback/gripper_status{_left/_right}`、`/feedback/hand_status{_left/_right}` 是仓库示例驱动提供的扩展反馈 topic；用户驱动可按自身能力提供，不是控制层接入其他机械臂的最小要求。
-
-### 遥操控制
-
-#### `/left_teleop_enable` & `/right_teleop_enable`
-
-消息类型：`std_msgs/Bool`
-
-遥操开关状态；`tego_ros` 订阅。`true` 时把 `/control/joint_states_*_raw` 转发到 `/control/move_js_*`，`false` 时桥接不下发命令。
-
-#### `/left_teleop_trigger` & `/right_teleop_trigger`
-
-消息类型：`std_srvs/Trigger`
-
-服务：触发开启/关闭遥操。`tego_ros` 通过此服务请求 `agx_arm_ctrl` 切换遥操状态。
-
-### 控制类服务
-
-|服务|类型|说明|
-|---|---|---|
-|`/reset_pose`|`std_srvs/Empty`|请求重置手柄位姿|
-|`/reset_control`|`tego_msgs/ResetControl`|请求手柄控制复位（含 `RESET_ZERO` / `RESET_FACTORY`）|
-|`/enable_handle_motor`|`std_srvs/SetBool`|启/停手柄电机|
-|`/enable_reverse`|`std_srvs/SetBool`|开关 IMU 方向反转|
-
-`tego_msgs/ResetControl` 字段：
-
-|字段|类型|说明|
-|---|---|---|
-|`reset_mode`|`uint8`|`0` = `RESET_ZERO`，`1` = `RESET_FACTORY`|
-
-### 检查链路
-
-```bash
-ros2 topic list
-ros2 topic hz /left_handle_pose
-ros2 topic echo /feedback/joint_states_left --once
-ros2 service list | grep -E 'teleop_trigger|reset_control'
-```
-
----
-
-
-## 安全空间编辑器
-
-`arm_safety_monitor` 是一个离线安全空间编辑器，直接读取 `tego_bringup/config/` 下的配置文件，在 RViz 中显示并编辑：
-
-- `safety.workspace` 对应轴对齐工作空间 Box；
-- `safety.virtual_walls` 对应虚拟墙 Plane；
-- 保存时只增量更新配置文件的 `safety` 配置，并将 `safety` 块放到文件末尾；
-- `robot`、`ik`、`handle` 等非安全配置及其注释会保留，不会被整份 YAML 重写；
-- 保存会直接原子写回当前配置文件；
-- 保存后的约束需要重启遥操节点后生效，不会热更新正在运行的 IK 节点。
-
-安全空间编辑阶段不需要连接真实机械臂，也不需要读取 `/feedback/joint_states_left/right`。用户通过 `joint_state_publisher_gui` 手动调节关节角度，在 RViz 中观察目标姿态并配置安全空间。
-
-启动默认 Piper配置文件：
-
-```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 launch arm_safety_monitor safety_monitor.launch.py
+export PYTHONNOUSERSITE=1
 ```
 
-切换其他机械臂时只需修改配置文件文件名：
+再选择一个入口：
 
 ```bash
+ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=cpp
+ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch tego_bringup demo_piper.launch.py
+ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python \
+  arm_port:=left_arm port_name:=left_tego
+```
+
+使用自有机械臂驱动时传入 `start_arm:=false`，该参数只关闭仓库示例驱动。
+
+双击内侧按键切换遥操；遥操关闭时长按该键，初始化示教器并让机械臂回零。
+回零会发送运动命令，操作前留出运动空间。Demo 的双击窗口为 0.30 s，长按时间为
+2.0 s。支持夹爪的配置还会使用扳机按压量映射夹爪宽度。
+
+</details>
+
+<details>
+<summary><strong>Profile 和安装方向</strong></summary>
+
+示例 profile 位于 `tego_bringup/config/`：
+
+| Profile | 默认用途 |
+| --- | --- |
+| `nero_profile.yaml` | Nero 左右侧装双臂 |
+| `piper_profile.yaml` | Piper 正装单臂 |
+
+`side` 与 `installation_pos` 的职责不同：
+
+- `side: left/right` 选择 topic、service、节点名和示教器内侧按键；CAN 端口单独指定。
+- `installation_pos: horizontal/left/right` 描述机械臂的物理安装方向。
+
+接在右侧通信链路的正装机械臂使用 `side:=right`，profile 配置为：
+
+```yaml
+robot:
+  installation_pos: horizontal
+```
+
+这套规则适用于 Piper、Nero 和其他机械臂。双臂可按通信侧分别配置：
+
+```yaml
+robot:
+  installation_pos:
+    left: left
+    right: right
+```
+
+映射还可提供 `default`。配置值非法，或当前 `side` 缺少对应项且没有 `default`
+时，节点会拒绝启动。字段完全缺失时默认使用 `horizontal`；从 v0.1.0 迁移侧装
+自定义 profile 时，应显式补上安装方向。
+
+安装矩阵把示教器 `world` 平移转换到机械臂 `base_link`：
+
+| 安装方向 | `world +x` | `world +y` | `world +z` |
+| --- | --- | --- | --- |
+| `horizontal` | `base +x` | `base +y` | `base +z` |
+| `left` | `base +y` | `base +z` | `base +x` |
+| `right` | `base -y` | `base -z` | `base +x` |
+
+`left/right` 保留 v0.1.0 Nero 两侧 `arm_home_state` 的实际 FK 方向。
+`horizontal` 避免末端 home 姿态错误交换平移轴。补偿只作用于目标平移，原有姿态
+增量路径不变。Piper 还会收到同一个值，用于控制器重力补偿。
+
+`arm_home_state` 继续作为回零命令和 FK 参考；本次遥操起点来自实时关节反馈。
+每个列表只填一侧的驱动通道，前 `nq` 项按 URDF 臂关节顺序排列。示例 Piper 为
+6 项，Nero 每侧为 10 项（7 个臂关节 + 3 个末端通道），回零列表长度需与实际驱动
+反馈一致。
+
+| Profile 区块 | 配置内容 |
+| --- | --- |
+| `robot` | URDF、基座/末端 frame、锁定关节、回零状态和安装方向 |
+| `ik` | 单帧关节变化限制、构型和奇异性惩罚 |
+| `handle` | `zoom_factor`，示例 Nero 为 1.4，Piper 为 1.1 |
+| `safety` | 工作空间 Box、虚拟墙和保护点 |
+
+示例的 `ik.max_delta_q_rad: 0.1` 限制 IK 每步关节变化，不等于电机速度。当前
+高层 demo **未读取 YAML 中的 `robot.speed_percent`**。调速时可单独启动示例
+驱动并传入 `speed_percent:=30`，再用 `start_arm:=false` 启动其余链路，见下文。
+
+完整 profile、驱动和夹爪示例见[机械臂适配指南](机械臂适配指南.md)。
+
+</details>
+
+<details>
+<summary><strong>运行接口与机械臂适配</strong></summary>
+
+主数据链路：
+
+```text
+示教器 CAN
+  -> tego_ros
+  -> /left_handle_pose 或 /right_handle_pose
+  -> Pinocchio IK
+  -> /control/joint_states_{left,right}_raw
+  -> tego_ros（仅在遥操开启时转发）
+  -> /control/move_js_{left,right}
+  -> 机械臂驱动
+```
+
+| 接口 | 类型 | 用途 |
+| --- | --- | --- |
+| `/left_handle_pose`, `/right_handle_pose` | `geometry_msgs/msg/PoseStamped` | 示教器末端位姿 |
+| `/feedback/joint_states_{left,right}` | `sensor_msgs/msg/JointState` | 机械臂实时反馈 |
+| `/control/joint_states_{left,right}_raw` | `sensor_msgs/msg/JointState` | IK 原始目标 |
+| `/control/move_js_{left,right}` | `sensor_msgs/msg/JointState` | 转发给驱动的目标 |
+| `/left_teleop_enable`, `/right_teleop_enable` | `std_msgs/msg/Bool` | 遥操开关状态 |
+| `/left_teleop_trigger`, `/right_teleop_trigger` | `std_srvs/srv/Trigger` | 切换遥操 |
+
+自有驱动至少需要发布 `/feedback/joint_states_{side}`，并订阅
+`/control/move_js_{side}`。关节单位为 rad。关节名、方向、零位、使能、夹爪和厂商
+通信由驱动负责。
+
+开启遥操前必须有新鲜关节反馈。反馈超时后，节点会停止本次会话并清除安装映射。
+双击内侧按键切换遥操；遥操关闭时长按该键，可初始化示教器并让机械臂回零。
+
+Demo launch 参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `backend` | `cpp` | 示教器 bridge 实现 |
+| `side` | Piper 为 `right` | 单臂通信路由 |
+| `profile_path` | 对应示例 profile | URDF、IK、安装方向和安全配置 |
+| `start_arm` | `true` | 启动示例机械臂驱动 |
+| `start_teleop` | `true` | 启动 IK 遥操节点 |
+| `gripper_width_min/max` | `0.00/0.07` | 夹爪范围，单位 m |
+| `pub_rate` | `200.0` | bridge 发布频率，单位 Hz |
+| `log_level` | `info` | bridge 和示例驱动的日志级别 |
+| `arm_port`, `port_name` | `right_arm`, `right_tego` | Piper 机械臂、示教器 CAN 端口 |
+| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero 机械臂 CAN 端口 |
+| `left_port_name`, `right_port_name` | `left_tego`, `right_tego` | Nero 示教器 CAN 端口 |
+
+</details>
+
+<details>
+<summary><strong>分步启动与调试</strong></summary>
+
+以右侧 Piper 为例，各终端先加载上面的手动启动环境，再从工作空间根目录执行：
+
+```bash
+# Terminal 1: example driver / 终端 1：示例驱动
+ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py \
+  arm_type:=piper can_port:=right_arm topics_end:=_right \
+  installation_pos:=horizontal speed_percent:=30
+
+# Terminal 2: IK / 终端 2：IK
+ros2 launch agx_arm_ctrl teleop_right_arm.launch.py \
+  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml \
+  feedback_timeout_sec:=1.0
+
+# Terminal 3: handle bridge / 终端 3：示教器 bridge
+ros2 launch tego_bringup right_piper.launch.py port_name:=right_tego \
+  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml
+```
+
+Python bridge 改用 `right_piper_python.launch.py`。Nero 对应的驱动和 IK 入口
+为 `start_double_arm.launch.py`、`teleop_double_arm.launch.py`；只启动示教器
+bridge 时，给 Nero demo 传入 `start_arm:=false start_teleop:=false`。
+
+低层 IK launch 必须提供 `profile_path`；单臂入口还支持 `side` 和 `node_name`。
+`feedback_timeout_sec` 默认 1.0 s。单独启动驱动时，安装方向应与 profile 一致。
+
+`run_single_node.launch.py` 是高级 C++ bridge 入口，需要逗号分隔的
+`arm_home_state` 和显式 topic 映射。它的默认值与机型 wrapper 不同：
+`port_name=can0`、`gripper_width_max=0.10`、`zoom_factor=2.0`、
+`use_pose_dt_zoom=false`、`use_trigger_pose=false`。Demo wrapper 会提供手柄
+几何参数并启用后两项。自建 bridge launch 可参考[适配示例](机械臂适配指南.md)。
+
+</details>
+
+<details>
+<summary><strong>手柄状态、服务与链路检查</strong></summary>
+
+| 手柄 topic 后缀 | 类型 | 常用字段 |
+| --- | --- | --- |
+| `/joint` | `sensor_msgs/msg/JointState` | 示教器关节，不是机械臂反馈 |
+| `/imu` | `sensor_msgs/msg/Imu` | 姿态、角速度、加速度 |
+| `/handle_state` | `tego_msgs/msg/HandleState` | `joystick_x/y`、`trigger_press_percentage`、按键事件和接收计数 |
+| `/mt_sensor_status` | `tego_msgs/msg/MtSensorStatus` | `name`、`data`、`receive_count`；每个传感器含 `angle_deg/rad`、`voltage_x/y` |
+
+以上加 `/tego_l` 或 `/tego_r` 前缀，例如 `/tego_r/handle_state`。CAN socket
+连接成功不代表收到数据，可结合接收计数和 topic 频率确认。
+
+| 服务后缀 | 类型 | 动作 |
+| --- | --- | --- |
+| `/reset_pose` | `std_srvs/srv/Empty` | 重新采集示教器位姿参考 |
+| `/reset_control` | `tego_msgs/srv/ResetControl` | 编码器复位，`reset_mode` 0 = 零位，1 = 出厂 |
+| `/enable_handle_motor` | `std_srvs/srv/SetBool` | 启停手柄电机 |
+| `/enable_reverse` | `std_srvs/srv/SetBool` | 切换手柄基座反向 |
+
+服务同样加 `/tego_l` 或 `/tego_r` 前缀。IK 的 `/left_teleop_trigger` 和
+`/right_teleop_trigger` 则每次调用都会**切换**遥操状态。复位服务与机械臂回零
+是不同操作。
+
+右侧链路的只读检查命令；左侧替换 `right` 和 `tego_r`：
+
+```bash
+ros2 topic hz /right_handle_pose
+ros2 topic echo /tego_r/handle_state --once
+ros2 topic echo /feedback/joint_states_right --once
+ros2 topic echo /right_teleop_enable --once
+ros2 topic echo /control/joint_states_right_raw --once
+ros2 topic echo /control/move_js_right --once
+ros2 service list
+```
+
+遥操关闭时，最后两个 topic 可能没有数据。按“手柄位姿 → 反馈与开关 → IK 原始
+输出 → 最终命令”的顺序检查。遥操关闭期间，bridge 仍可发送回零命令。
+
+</details>
+
+<details>
+<summary><strong>安全空间编辑器</strong></summary>
+
+离线编辑 profile 中的 workspace 和 virtual walls：
+
+```bash
+ros2 launch arm_safety_monitor safety_monitor.launch.py
 ros2 launch arm_safety_monitor safety_monitor.launch.py \
   profile_name:=nero_profile.yaml
 ```
 
-launch 默认优先从工作区源码目录 `tego_bringup/config/` 查找配置文件，并使用其中的 `robot.urdf_path` 加载 URDF；保存时会直接修改源码配置文件，而不是只修改 `install` 副本。非源码安装环境会回退到 ROS package share 下的 config 目录，也可以通过 `TEGO_PROFILE_DIR` 指定可编辑目录。支持 `package://` 路径，不需要再在 RViz 中手动配置 RobotModel 或 URDF。RViz 配置已预置 `InteractiveMarkers`，其 `Update Topic` 为 `/arm_safety/update`，不需要再手动添加该显示项。launch 会启动：
+Launch 会启动 RViz、`robot_state_publisher`、`joint_state_publisher_gui` 和
+编辑器，并从 profile 加载 URDF；不需要机械臂或 CAN 反馈。InteractiveMarkers
+的 Update Topic 为 `/arm_safety/update`。
 
-```text
-robot_state_publisher
-    ↑
-joint_state_publisher_gui  ← 手动调节关节角度
-    ↓
-   /tf
-    ↓
-RViz  ← 机器人模型和安全空间
-```
+1. 将 RViz **Fixed Frame** 设为 `robot.base_frame`，通常是 `base_link`。
+2. 拖动关节 GUI 滑块，检查不同姿态。
+3. 右键基座处绿色球新建 Box 或 Plane；已有对象也可直接右键编辑。
+4. 拖动 Box 移动中心，用菜单调整尺寸或删除。
+5. 移动 Plane，调整绿色法向箭头；菜单可翻转法向。结合 profile 检查
+   `keep_side` 和 `protected_frames`。
+6. 选择**保存 profile**，重启遥操节点使约束生效。
 
-另外还会启动 `arm_safety_monitor_node` 负责读取、编辑和保存安全空间。这里的 `robot_state_publisher` 和 `joint_state_publisher_gui` 只是离线模型显示所需的辅助节点，不属于机械臂驱动层；URDF 本身不能根据关节角度发布可动 link 的 TF。
+保存时原子更新 `safety` 块，保留其他区块及其注释。优先写源码 profile，找不到
+时回退到安装目录；可用 `TEGO_PROFILE_DIR` 指定可写目录。`box_resize_step`
+控制 Box 菜单的调整步长，默认 0.05 m；`plane_size` 默认 0.8 m，只影响墙面显示
+尺寸，实际约束是无限平面。
 
-RViz 操作流程：
+约束只保护 `protected_frames` 的原点，不会自动覆盖所有连杆。若 profile 使用
+`tool0` 而没有生成 `ee`，编辑器新建对象后还需把默认的 `protected_frames: [ee]`
+改为实际 frame。
 
-1. 将 `Fixed Frame` 设置为配置文件中的 `robot.base_frame`，Piper/Nero 默认是 `base_link`；
-2. 在 `joint_state_publisher_gui` 中拖动关节滑块，调整目标姿态；
-3. 已配置的 Box 和 Plane 会自动生成，Marker 文本只显示对应的工作空间或墙名称；
-4. 当配置文件中还没有任何工作空间或虚拟墙时，可右键`base_frame`的绿色球创建第一个 Box/Plane；绿色球不是唯一的编辑入口，已有对象后可直接右键对应Marker 使用菜单；
-5. 拖动 Box 修改中心；需要调整尺寸或删除 Box 时，右键 Box 本体后使用对应菜单；
-6. Plane 会显示绿色法向量箭头；普通鼠标左键拖动墙面可平移墙，拖动绿色箭头可调整法向；按住 `Ctrl` 再用鼠标左键拖动墙面可旋转墙的朝向；
-7. 需要翻转法向、增删虚拟墙或者保存时，右键虚拟墙本体，选择对应菜单。
+</details>
 
-如果 RViz 出现 `No transform from [link5] to [base_link]`，检查 `joint_state_publisher_gui`、`robot_state_publisher`、profile 中的 URDF 和 RViz 的 `Fixed Frame`。离线编辑模式不依赖真实机械臂反馈 topic。
+<details>
+<summary><strong>排障</strong></summary>
 
-## 参数限制
+先在可视化中检查 IK 目标，再以硬件低速接入运动。检查三个平移轴、首帧无跳位、
+姿态行为，以及 Piper 重力补偿方向。
 
-### 夹爪 (Gripper)
+| 现象 | 检查项 |
+| --- | --- |
+| CAN 无数据 | `bus-info`、1 Mbps bitrate、`ip -details link show type can` |
+| 遥操无动作 | 遥操开关、实时反馈、raw 目标和 `move_js` topic |
+| 开启后立即停止 | 反馈频率和 `feedback_timeout_sec` |
+| 正装 x/z 互换 | `installation_pos: horizontal` 和当前 install 空间 |
+| IK infeasible | URDF frame、关节限制、workspace、墙、碰撞对和 `zoom_factor` |
+| RViz 缺 TF | URDF、`base_frame`、状态发布节点和 Fixed Frame |
 
-|参数|范围|单位|默认|说明|
-|---|---|---|---|---|
-|`gripper_width_min`|`[0.0, 0.10]`|m|`0.00`|夹爪宽度下限，传给 `tego_ros` 的限位参数|
-|`gripper_width_max`|`[0.0, 0.10]`|m|`0.07`|夹爪宽度上限|
+遇到 `Infeasible_Problem_Detected`，先确认加载的 profile 和 URDF frame，再查
+关节限位、Box 范围/余量、墙的法向/保留侧和保护点，结合日志中的 `wall_dist`
+定位。降低手柄缩放，从可达姿态重新开始。`collision_pairs` 是求解后的自碰撞
+检测，不是 Opti 硬约束。
 
-> ⚠️ `gripper_width_max` 必须 ≥ `gripper_width_min`；超出该范围的位姿会被钳制。
+导入失败时检查 `which python3`，并在 `tego` 环境重做依赖检查。ROS 包或新 launch
+不可见时，重新构建并加载 `install/setup.bash`。真机调试的速度限制和停止机制由
+机械臂驱动及硬件提供。
 
-### 位姿缩放
-
-|参数|范围|单位|默认|说明|
-|---|---|---|---|---|
-|`zoom_factor`|`[0.1, 5.0]`|无量纲|`2.0`|主从位姿缩放系数，值越大从臂动作幅度越大|
-|`gripper_length`|`[0.0, 0.30]`|m|`0.14`|末端执行器长度，用于对齐主从位姿的法兰→TCP 偏移|
-
-> ⚠️ `zoom_factor` 过大（≥ 3.0）时，靠近机械臂奇异点会出现关节跳变，请谨慎调高。
-
-### 手柄零位
-
-|参数|范围|单位|默认|说明|
-|---|---|---|---|---|
-|`base_to_imu_roll` / `_pitch` / `_yaw`|任意|deg|`93.0` / `5.0` / `-6.0`|基座到 IMU 的安装偏移；与实际硬件一致才能保证姿态零位正确|
-|`imu_zero_rpy`|任意|deg|`0, 0, 0`|手柄启动时的 IMU 零位偏置|
-
----
-
-## 注意事项
-
-### CAN 通信
-
-- 启动前**必须**先激活 CAN 模块
-- 波特率：**1000000 bps**
-- 若出现 `SendCanMessage failed` 或 `tego_ros` 状态长时间不更新，请检查：
-  - `lsmod | grep gs_usb`（需要加载 `gs_usb` 内核模块）
-  - `ip -details link show type can` 的 bitrate 和状态
-  - 逻辑接口名是否与 launch 参数一致（`left_tego` / `right_tego` / `left_arm` / `right_arm`）
-
-### ⚠️ 安全警告
-
-- **保持安全距离**：机械臂运动时，请勿进入其工作空间
-- **首次开启遥操前**：确认机械臂周围无障碍物，关节处于安全零位附近
-- **遥操关闭时**：`tego_ros` **不会**把 raw 关节命令转发给机械臂；CAN 断开时同理
-- **奇异点风险**：靠近运动学奇异点时，关节可能发生突然大幅运动
-- **位姿缩放**：调高 `zoom_factor` 后运动更剧烈，请逐步调高并保持低速测试
-
-### 排障
-
-- **找不到 CAN 接口**：检查 USB 连接、`lsmod | grep gs_usb`、`ip link show type can`；必要时 `sudo modprobe gs_usb`
-- **`tego_ros` 连接失败**：确认对应逻辑接口存在、bitrate 为 `1000000`，并检查 `/tego_l/imu` 或 `/tego_r/imu` 是否有数据
-- **遥操没有动作**：确认 `/left_teleop_enable` 或 `/right_teleop_enable` 已开启；检查对应 raw 话题 `/control/joint_states_*_raw` 和 `/control/move_js_*` 是否有数据
-- **CasADi/IPOPT 报 `Infeasible_Problem_Detected`**：例如日志中出现 `Solver failed`、`return_status is 'Infeasible_Problem_Detected'`。这表示当前 IK 优化在当前关节状态、目标位姿和安全约束组合下没有找到可接受解，**不一定是 CAN 或通信故障**。按以下顺序排查：
-  1. 确认 `profile_path` 指向实际使用的配置文件，并检查配置文件的 `urdf_path`、`base_frame`、`ee_frame` / `ee_offset` 以及 `safety_frames` 是否与 URDF 一致。
-  2. 检查关节上下限，以及 `ik.enable_hard_delta_q_constraint` 和 `ik.max_delta_q_rad`；单帧目标变化过大或最大关节增量过小，都可能使可行域为空。
-  3. 可能是工作空间过小，检查 `safety.workspace` 的 `min`、`max`、`margin` 和 `protected_frames`，以及 `safety.virtual_walls` 的方向、`keep_side`、`margin` 和保护点；重点关注日志中的 `wall_dist`。
-  4. 从当前位置做小幅度手柄动作，适当降低 `zoom_factor`；目标距离过远、接近奇异姿态或姿态变化过大时，可能导致求解器无法在实时迭代次数内收敛。
-  5. 让机械臂回到安全姿态后重试，并检查日志中是否同时出现 `wall_dist`、workspace、frame、collision 或其他约束相关信息。`collision_pairs` 当前用于求解后的自碰撞检测，并不是 Opti 中的硬约束；如果出现自碰撞告警，应单独检查碰撞几何和姿态。
-- **Python 依赖导入失败**：用启动节点实际使用的 `python3 -c 'import ...'` 检查，不要把依赖装到另一个 Python 环境
-- **构建结果异常**：确认已经 source `/opt/ros/humble/setup.bash` 和 `install/setup.bash`；必要时清理本地 `build/`、`install/`、`log/` 再重建
+</details>
