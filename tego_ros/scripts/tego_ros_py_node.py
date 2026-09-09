@@ -208,6 +208,7 @@ class TegoBridgeNode(Node):
         self.show_imu_data = True
         self.use_piper_mode = True
         self.is_nero = False
+        self.effector_type = "none"
         self.zoom_factor = 1.0
         self.handle_seg0 = [0.0, 0.0, 0.123, 0.0, 0.0, 0.0]
         self.handle_seg1 = [0.0, 0.0, 0.0, 1.5707963, -0.1359, 3.1415926]
@@ -332,7 +333,7 @@ class TegoBridgeNode(Node):
         self.remote_joint_publisher = self.create_publisher(
             JointState, self.remote_joint_topic_out, 200
         )
-        if self.is_nero:
+        if self.effector_type == "agx_gripper":
             self.nero_gripper_publisher = self.create_publisher(
                 JointState, self.nero_gripper_topic_name, 200
             )
@@ -444,6 +445,9 @@ class TegoBridgeNode(Node):
             self.get_ros_parameter("imu_zero_rpy", self.imu_zero_rpy)
         )
         self.is_nero = bool(self.get_ros_parameter("is_nero", self.is_nero))
+        self.effector_type = str(
+            self.get_ros_parameter("effector_type", self.effector_type)
+        )
         self.nero_gripper_topic_name = str(
             self.get_ros_parameter(
                 "nero_gripper_topic_name", self.nero_gripper_topic_name
@@ -1155,7 +1159,7 @@ class TegoBridgeNode(Node):
 
             cur_length = self.get_gripper_width()
             if (
-                self.is_nero
+                self.effector_type == "agx_gripper"
                 and self.nero_gripper_publisher is not None
                 and abs(self.last_gripper_length - cur_length) > 0.003
             ):

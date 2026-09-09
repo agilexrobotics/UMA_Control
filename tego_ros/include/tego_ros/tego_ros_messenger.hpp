@@ -92,6 +92,7 @@ private:
     std::string node_name = "tego_node";
     string arm_home_state;
     string imu_zero_rpy = "0, 0, 0";
+    string effector_type = "none";
     string nero_gripper_topic_name = "gripper_states";
 
     double angle_value = 0.35;

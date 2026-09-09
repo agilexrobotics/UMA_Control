@@ -3,6 +3,7 @@ robot:
   urdf_path: package://tego_description/urdf/piper/urdf/piper_description.urdf  # URDF 路径(支持 package://)
   base_frame: base_link                          # IK 目标位姿的参考基座 frame
   installation_pos: horizontal                   # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
+  effector_type: agx_gripper                     # 末端执行器: none（关闭） / agx_gripper / revo2
   speed_percent: 100                             # 机械臂运动速度百分比，范围 0~100
   ee_offset:                                     # 末端工具 frame(URDF 无 tool0 时用此偏移,运行时创建)
     parent_joint: joint6                         #   挂在哪个关节上
@@ -10,7 +11,7 @@ robot:
     rpy: [0.0, 0.0, 0.0]                         #   相对该关节的旋转 [r, p, y] (rad)
   locked_joints: []                              # 需锁定的关节名，例如需要过滤 gripper/灵巧手等非臂关节
   arm_home_state:                                # 双臂使用 left/right，并分别填写对应一侧，不要填写两侧通道数量之和
-    default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ik:
   enable_hard_delta_q_constraint: true           # 是否启用单帧最大关节变化硬约束

@@ -64,6 +64,7 @@ def _side_values(side: str, arm_type: str) -> Dict[str, object]:
         "arm_home_state_key": side if arm_type == "nero" else "default",
         "default_profile": f"{arm_type}_profile.yaml",
         "default_zoom_factor": 1.4 if arm_type == "nero" else 1.1,
+        "default_effector_type": "agx_gripper" if arm_type == "nero" else "none",
     }
     values.update(_HANDLE_SEGMENTS)
     return values
@@ -78,6 +79,9 @@ def _profile_values(context, profile_path, side, arm_type):
     )
     values["zoom_factor"] = float(
         (profile.handle or {}).get("zoom_factor", values.pop("default_zoom_factor"))
+    )
+    values["effector_type"] = (
+        profile.effector_type or values.pop("default_effector_type")
     )
     values.pop("default_profile")
     return values
@@ -120,6 +124,7 @@ def _cpp_bridge(context, side, arm_type, substitutions):
         "world_to_base_y": str(values["world_to_base_y"]),
         "is_nero": str(values["is_nero"]).lower(),
         "nero_gripper_topic_name": values["nero_gripper_topic_name"],
+        "effector_type": values["effector_type"],
         "arm_home_state": values["arm_home_state"],
         "publish_sim_joint": "false",
         "gripper_width_min": values["gripper_width_min"],
@@ -165,6 +170,7 @@ def _python_bridge(context, side, arm_type, substitutions):
         "world_to_base_y": values["world_to_base_y"],
         "is_nero": values["is_nero"],
         "nero_gripper_topic_name": values["nero_gripper_topic_name"],
+        "effector_type": values["effector_type"],
         "arm_home_state": values["arm_home_state"],
         "publish_sim_joint": False,
         "gripper_width_min": values["gripper_width_min"],

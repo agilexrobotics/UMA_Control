@@ -49,6 +49,7 @@ def generate_launch_description():
 
     is_nero = LaunchConfiguration("is_nero")
     nero_gripper_topic_name = LaunchConfiguration("nero_gripper_topic_name")
+    effector_type = LaunchConfiguration("effector_type")
 
     declared_args = [
         DeclareLaunchArgument("port_name", default_value="can0"),
@@ -109,6 +110,11 @@ def generate_launch_description():
         DeclareLaunchArgument("gripper_length", default_value="0.14"),
         DeclareLaunchArgument("is_nero", default_value="false"),
         DeclareLaunchArgument(
+            "effector_type",
+            default_value="none",
+            choices=["none", "agx_gripper", "revo2"],
+        ),
+        DeclareLaunchArgument(
             "nero_gripper_topic_name", default_value="gripper_states"
         ),
     ]
@@ -133,6 +139,7 @@ def generate_launch_description():
                 "long_press_timeout": long_press_timeout,
                 "pub_rate": pub_rate,
                 "is_nero": is_nero,
+                "effector_type": effector_type,
                 "nero_gripper_topic_name": nero_gripper_topic_name,
                 "arm_home_state": arm_home_state,
                 "imu_zero_rpy": imu_zero_rpy,

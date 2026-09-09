@@ -60,7 +60,7 @@ void TegoRosMessenger::SetupSubscription()
     tego_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/pika_pose", 200);
     imu_publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("~/imu", 200);
     remote_joint_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>(remote_joint_topic_out, 200);
-    if (is_nero)
+    if (effector_type == "agx_gripper")
     {
         nero_gripper_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>(nero_gripper_topic_name, 200);
     }
@@ -125,6 +125,7 @@ void TegoRosMessenger::declareParameters()
     GetRosParameter("arm_home_state", arm_home_state);
     GetRosParameter("imu_zero_rpy", imu_zero_rpy);
     GetRosParameter("is_nero", is_nero);
+    GetRosParameter("effector_type", effector_type);
     GetRosParameter("nero_gripper_topic_name", nero_gripper_topic_name);
 
     GetRosParameter("add_angle", add_angle, true);
@@ -175,6 +176,7 @@ void TegoRosMessenger::declareParameters()
     RCLCPP_INFO(this->get_logger(), "imu_zero_rpy: %s", imu_zero_rpy.c_str());
     RCLCPP_INFO(this->get_logger(), "gripper_length: %-.2lf", gripper_length);
     RCLCPP_INFO(this->get_logger(), "is_nero: %s", Bool2String[is_nero].c_str());
+    RCLCPP_INFO(this->get_logger(), "effector_type: %s", effector_type.c_str());
     base_to_imu_roll = base_to_imu_roll / 180.0 * M_PI;
     base_to_imu_pitch = base_to_imu_pitch / 180.0 * M_PI;
     base_to_imu_yaw = base_to_imu_yaw / 180.0 * M_PI;
@@ -980,7 +982,8 @@ void TegoRosMessenger::PublishStateToROS()
         handle_state_publisher_->publish(handle_msg);
         static double last_gripper_length = -1;
         double cur_length = GetGripperWidth();
-        if (is_nero && fabs(last_gripper_length - cur_length) > 0.003)
+        if (effector_type == "agx_gripper" && nero_gripper_publisher_ &&
+            fabs(last_gripper_length - cur_length) > 0.003)
         {
             last_gripper_length = cur_length;
             sensor_msgs::msg::JointState gripper_msg;

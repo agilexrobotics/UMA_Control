@@ -3,6 +3,8 @@
 One entry for both backends: ``backend:=cpp/python``(默认 cpp)。
 """
 
+from pathlib import Path
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
@@ -10,6 +12,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
+from agx_arm_ctrl.robot_profile import load_profile
 from tego_bringup.bridge_launch import bridge_wrapper_name
 
 
@@ -24,23 +27,32 @@ def generate_launch_description() -> LaunchDescription:
     profile_path = LaunchConfiguration("profile_path")
     backend = LaunchConfiguration("backend")
 
-    arm_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [
-                    FindPackageShare("agx_arm_ctrl"),
-                    "launch",
-                    "start_double_arm.launch.py",
-                ]
+    def build_arm(context):
+        profile = load_profile(
+            str(Path(profile_path.perform(context))), validate_robot=False
+        )
+        effector_type = profile.effector_type or "agx_gripper"
+        return [
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [
+                            FindPackageShare("agx_arm_ctrl"),
+                            "launch",
+                            "start_double_arm.launch.py",
+                        ]
+                    )
+                ),
+                launch_arguments={
+                    "left_can_port": left_arm_port,
+                    "right_can_port": right_arm_port,
+                    "effector_type": effector_type,
+                    "log_level": log_level,
+                }.items(),
+                condition=IfCondition(start_arm),
             )
-        ),
-        launch_arguments={
-            "left_can_port": left_arm_port,
-            "right_can_port": right_arm_port,
-            "log_level": log_level,
-        }.items(),
-        condition=IfCondition(start_arm),
-    )
+        ]
+
     teleop_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
@@ -105,7 +117,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "start_teleop", default_value="true", choices=["true", "false"]
             ),
-            arm_launch,
+            OpaqueFunction(function=build_arm),
             teleop_launch,
             OpaqueFunction(function=build_bridges),
         ]

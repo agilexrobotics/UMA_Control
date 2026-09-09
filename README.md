@@ -61,10 +61,9 @@ sudo apt install -y \
 
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda create -n tego --override-channels -c conda-forge python=3.10 -y
+conda create -n tego python=3.10 -y
 conda activate tego
-conda install --override-channels -c conda-forge \
-  "pinocchio=3.2.0" "casadi=3.6.7" scipy \
+conda install "pinocchio=3.2.0" "casadi=3.6.7" scipy \
   typing_extensions exceptiongroup -y
 python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
   pyyaml opencv-python ur-rtde netifaces meshcat
@@ -100,6 +99,7 @@ The Python bridge additionally needs:
 
 ```bash
 conda activate tego
+export PYTHONNOUSERSITE=1
 python -m pip install python-can
 python -m pip install -e ~/tego/src/tego_sdk/python
 python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
@@ -251,6 +251,10 @@ no matching key or default, stop startup. A missing field defaults to
 `horizontal`. When migrating a side-mounted custom profile from v0.1.0,
 set `installation_pos` explicitly.
 
+`robot.effector_type` selects the example driver's end effector. Use `none` to
+disable it, `agx_gripper` for the gripper, or `revo2` for the dexterous hand.
+The bundled Piper and Nero profiles use `agx_gripper`.
+
 Translation is mapped from handle `world` to arm `base_link`:
 
 | Installation | `world +x` | `world +y` | `world +z` |
@@ -267,12 +271,12 @@ existing path. Piper also receives the same value for gravity compensation.
 `arm_home_state` remains the home command and FK reference; the live session
 origin comes from current joint feedback. Each list contains one arm's driver
 channels, with the first `nq` entries in URDF arm order. The bundled Piper
-profile has 6 entries; Nero has 10 per side (7 arm + 3 end-effector channels).
-These lengths must match the actual driver feedback used for homing.
+profile has 9 entries (6 arm + 3 end-effector channels); Nero has 10 per side
+(7 arm + 3 end-effector channels). These lengths must match the driver feedback.
 
 | Profile block | What to configure |
 | --- | --- |
-| `robot` | URDF, base/tool frames, locked joints, home state and mounting |
+| `robot` | URDF, base/tool frames, end effector, home state and mounting |
 | `ik` | Per-step joint change limit, posture and singularity penalties |
 | `handle` | `zoom_factor`: Nero 1.4, Piper 1.1 in the bundled profiles |
 | `safety` | Workspace box, virtual walls and protected points |
@@ -539,10 +543,9 @@ sudo apt install -y \
 
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda create -n tego --override-channels -c conda-forge python=3.10 -y
+conda create -n tego python=3.10 -y
 conda activate tego
-conda install --override-channels -c conda-forge \
-  "pinocchio=3.2.0" "casadi=3.6.7" scipy \
+conda install "pinocchio=3.2.0" "casadi=3.6.7" scipy \
   typing_extensions exceptiongroup -y
 python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
   pyyaml opencv-python ur-rtde netifaces meshcat
@@ -576,6 +579,7 @@ Python bridge 还需安装：
 
 ```bash
 conda activate tego
+export PYTHONNOUSERSITE=1
 python -m pip install python-can
 python -m pip install -e ~/tego/src/tego_sdk/python
 python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
@@ -712,6 +716,10 @@ robot:
 时，节点会拒绝启动。字段完全缺失时默认使用 `horizontal`；从 v0.1.0 迁移侧装
 自定义 profile 时，应显式补上安装方向。
 
+`robot.effector_type` 选择示例驱动使用的末端执行器：`none` 关闭，
+`agx_gripper` 启用夹爪，`revo2` 启用灵巧手。Piper 和 Nero 示例均配置为
+`agx_gripper`。
+
 安装矩阵把示教器 `world` 平移转换到机械臂 `base_link`：
 
 | 安装方向 | `world +x` | `world +y` | `world +z` |
@@ -726,12 +734,12 @@ robot:
 
 `arm_home_state` 继续作为回零命令和 FK 参考；本次遥操起点来自实时关节反馈。
 每个列表只填一侧的驱动通道，前 `nq` 项按 URDF 臂关节顺序排列。示例 Piper 为
-6 项，Nero 每侧为 10 项（7 个臂关节 + 3 个末端通道），回零列表长度需与实际驱动
-反馈一致。
+9 项（6 个臂关节 + 3 个末端通道），Nero 每侧为 10 项（7 个臂关节 + 3 个末端
+通道），回零列表长度需与实际驱动反馈一致。
 
 | Profile 区块 | 配置内容 |
 | --- | --- |
-| `robot` | URDF、基座/末端 frame、锁定关节、回零状态和安装方向 |
+| `robot` | URDF、基座/末端 frame、末端执行器、回零状态和安装方向 |
 | `ik` | 单帧关节变化限制、构型和奇异性惩罚 |
 | `handle` | `zoom_factor`，示例 Nero 为 1.4，Piper 为 1.1 |
 | `safety` | 工作空间 Box、虚拟墙和保护点 |

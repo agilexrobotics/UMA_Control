@@ -5,6 +5,7 @@ robot:
   installation_pos:                                # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
     left: left
     right: right
+  effector_type: agx_gripper                       # 末端执行器: none（关闭） / agx_gripper / revo2
   speed_percent: 100                               # 双臂运动速度百分比，范围 0~100
   ee_offset:                                       # 末端工具坐标系，URDF没有时用此偏移
     parent_joint: joint7                           # 挂在哪个关节上
@@ -29,9 +30,9 @@ ik:
   enable_elbow_side_penalty: false                 # 是否启用肘部侧向惩罚
   elbow_side_penalty_weight: 2.0                   # 肘部侧向惩罚权重
   elbow_side_penalty_sharpness: 15.0               # 肘部侧向惩罚陡度
-  shoulder_frame: shoulder_safety_point            # psi 肩部参考坐标系(引用上面 safety_frames 的别名)
-  elbow_frame: elbow_safety_point                  # psi 肘部参考坐标系(引用上面 safety_frames 的别名)
-  wrist_frame: wrist_safety_point                  # psi 腕部参考坐标系(引用上面 safety_frames 的别名)
+  shoulder_frame: shoulder_safety_point            # psi 肩部参考坐标系
+  elbow_frame: elbow_safety_point                  # psi 肘部参考坐标系
+  wrist_frame: wrist_safety_point                  # psi 腕部参考坐标系
   singularity_weight: 0.02                         # 奇异性惩罚权重
 
 handle:                                            # 手柄桥接参数

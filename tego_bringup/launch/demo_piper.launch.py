@@ -21,10 +21,10 @@ from agx_arm_ctrl.robot_profile import load_profile
 from tego_bringup.bridge_launch import bridge_wrapper_name
 
 
-def resolve_installation_pos(profile_path: str, side: str) -> str:
-    """Resolve the driver's physical installation value for the routed arm."""
+def resolve_driver_settings(profile_path: str, side: str):
+    """Resolve profile values passed to the example arm driver."""
     profile = load_profile(str(Path(profile_path)), validate_robot=False)
-    return profile.installation_pos_for(side)
+    return profile.installation_pos_for(side), profile.effector_type or "none"
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -43,7 +43,7 @@ def generate_launch_description() -> LaunchDescription:
     def build(context):
         side_val = side.perform(context)
         backend_val = backend.perform(context)
-        installation_pos = resolve_installation_pos(
+        installation_pos, effector_type = resolve_driver_settings(
             profile_path.perform(context), side_val
         )
         wrapper = bridge_wrapper_name("piper", side_val, backend_val)
@@ -61,6 +61,7 @@ def generate_launch_description() -> LaunchDescription:
                 launch_arguments={
                     "can_port": arm_port,
                     "arm_type": "piper",
+                    "effector_type": effector_type,
                     "installation_pos": installation_pos,
                     "topics_end": f"_{side_val}",
                     "log_level": log_level,

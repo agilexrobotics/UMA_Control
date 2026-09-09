@@ -15,6 +15,7 @@ import yaml
 
 INSTALLATION_POSITIONS = ("horizontal", "left", "right")
 INSTALLATION_POSITION_KEYS = ("default", "left", "right")
+EFFECTOR_TYPES = ("none", "agx_gripper", "revo2")
 
 
 def validate_installation_pos(value: Any, context: str = "installation_pos") -> str:
@@ -22,6 +23,14 @@ def validate_installation_pos(value: Any, context: str = "installation_pos") -> 
     if not isinstance(value, str) or value not in INSTALLATION_POSITIONS:
         allowed = ", ".join(INSTALLATION_POSITIONS)
         raise ValueError(f"{context} 必须为 {allowed}, got {value!r}")
+    return value
+
+
+def validate_effector_type(value: Any) -> str:
+    """Validate and return one driver end-effector type."""
+    if not isinstance(value, str) or value not in EFFECTOR_TYPES:
+        allowed = ", ".join(EFFECTOR_TYPES)
+        raise ValueError(f"robot.effector_type 必须为 {allowed}, got {value!r}")
     return value
 
 
@@ -102,6 +111,8 @@ class RobotProfile:
     handle: Dict[str, Any] = field(default_factory=dict)
     # 通用物理安装朝向；可按通信 side 配置。支持的驱动还会用它配置重力补偿。
     installation_pos: Union[str, Dict[str, str]] = "horizontal"
+    # None 保留各 launch 的旧默认值；none 显式关闭末端执行器。
+    effector_type: Optional[str] = None
     enable_hard_delta_q_constraint: bool = True
     max_delta_q_rad: float = 0.15
     enable_psi_constraint: bool = False
@@ -485,6 +496,11 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
         collision_pairs=[list(p) for p in (robot_raw.get("collision_pairs") or [])],
         handle=raw.get("handle") or {},
         installation_pos=_parse_installation_pos(robot_raw),
+        effector_type=(
+            validate_effector_type(robot_raw["effector_type"])
+            if "effector_type" in robot_raw
+            else None
+        ),
     )
     _parse_ik(raw.get("ik") or {}, profile)
     _validate_home_state_lengths(profile)

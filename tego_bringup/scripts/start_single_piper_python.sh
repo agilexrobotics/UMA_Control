@@ -17,7 +17,7 @@ if [[ -z "${WORKSPACE_DIR}" ]]; then
   WORKSPACE_DIR="${WORKSPACE_DIR:-${SCRIPT_DIR}}"
 fi
 CONDA_BASE="${CONDA_BASE:-${HOME}/miniconda3}"
-CONDA_ENV="tego"
+CONDA_ENV="${CONDA_ENV:-tego}"
 SIDE="${SIDE:-right}"
 case "${SIDE}" in
   left|right) EXTRA_LAUNCH_ARGS=(side:=${SIDE} backend:=python) ;;
@@ -71,7 +71,7 @@ ros2 launch tego_bringup "${LAUNCH_FILE}" "${EXTRA_LAUNCH_ARGS[@]}" "$@" &
 LAUNCH_PID=$!
 cleanup() {
   kill "${LAUNCH_PID}" 2>/dev/null
-  for pat in "agx_arm_ctrl_single" "teleop_single_arm_node" "tego_ros_node" "tego_ros_py_node"; do
+  for pat in "teleop_single_arm_node" "tego_ros_node" "tego_ros_py_node"; do
     pkill -f "${pat}" 2>/dev/null || true
   done
 }
