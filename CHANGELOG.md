@@ -4,9 +4,11 @@
 
 首个面向 Nero 与 Piper 遥操的稳定版本。
 
-- 将 `horizontal`、`left`、`right` 定义为所有机械臂通用的物理安装方向；
-  `side` 继续只负责左右 CAN、topic、service 和节点路由。
+- 末端类型和 workspace 支持 `left/right/default`，兼容旧共享配置；Piper/Nero 回零统一按 side/default 选择。安全编辑器支持按侧保存，保留另一侧配置。
+- 将 `horizontal`、`left`、`right` 定义为所有机械臂通用的物理安装方向；`side` 继续只负责左右 CAN、topic、service 和节点路由。
 - 正装 Piper/Nero 可直接使用 `installation_pos: horizontal`，避免末端 home 姿态导致平移 x/z 互换；Piper 同时使用该值设置重力补偿。
+- 正装遥操在每次开启时对齐手柄水平前向，平移和旋转共用固定会话映射；以实时机械臂位姿为起点，拒绝无效、过期或朝向接近竖直的开启请求。侧装映射保持不变。
+- 补充手柄初始化零位与上电操作说明，适配指南提供英文、中文折叠章节。
 - 反馈超时或关闭遥操时同步清除本次安装映射，下一次遥操会重新建立会话映射。
 - Nero/Piper 的 C++ 和 Python 启动脚本会自动激活 `tego` Conda 环境，并隔离用户 site-packages
 - 统一 `left_arm` / `right_arm` 接口、launch、启动脚本和 C++/Python bridge 行为。

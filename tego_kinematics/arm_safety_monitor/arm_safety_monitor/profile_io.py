@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import copy
 import os
 import re
 import stat
@@ -64,9 +65,67 @@ def safety_section(document: MutableMapping[str, Any]) -> dict[str, Any]:
     return _required_mapping(document, "safety")
 
 
+def _workspace_is_sided(workspace):
+    if not isinstance(workspace, dict):
+        raise ProfileValidationError("safety.workspace 必须是 mapping")
+    keys = {"left", "right", "default"}
+    if workspace and not {"frame", "type", "min", "max", "margin", "protected_frames"}.intersection(workspace):
+        if set(workspace) - keys:
+            raise ProfileValidationError("workspace 分侧键必须为 left/right/default")
+        return True
+    if keys.intersection(workspace):
+        raise ProfileValidationError("workspace 不能混合共享 Box 和左右配置")
+    return False
+
+
+def workspace_for(document, side="", *, editable=False):
+    """Select a box; copy a fallback before editing so the other side is intact."""
+    if side not in ("", "left", "right"):
+        raise ProfileValidationError("side 必须为 left/right")
+    raw = document.get("safety", {}).get("workspace")
+    if raw is None:
+        return None
+    sided = _workspace_is_sided(raw)
+    if sided:
+        if not side:
+            raise ProfileValidationError("分侧 workspace 需要指定 side:=left/right")
+        key = side if side in raw else "default"
+        if key not in raw:
+            raise ProfileValidationError(f"workspace 缺少 {side} 或 default")
+        box = raw[key]
+    else:
+        box = raw
+    if editable and side:
+        if not sided:
+            raw = {"default": raw}
+            safety_section(document)["workspace"] = raw
+        # YAML aliases can share an explicit side as well as the default.
+        raw[side] = copy.deepcopy(box)
+        box = raw[side]
+    return box or None
+
+
+def _store_workspace(document, box, side):
+    if side not in ("", "left", "right"):
+        raise ProfileValidationError("side 必须为 left/right")
+    safety = safety_section(document)
+    raw = safety.get("workspace")
+    sided = raw is not None and _workspace_is_sided(raw)
+    if not side:
+        if sided:
+            raise ProfileValidationError("分侧 workspace 需要指定 side:=left/right")
+        safety["workspace"] = box
+    else:
+        if not sided:
+            raw = {"default": raw or {}}
+            safety["workspace"] = raw
+        raw[side] = box
+
+
 def set_workspace_box(
     document: MutableMapping[str, Any],
     *,
+    side: str = "",
     frame: str,
     center: Sequence[float],
     size: Sequence[float],
@@ -93,8 +152,7 @@ def set_workspace_box(
     half = [item / 2.0 for item in size_values]
     box_min = [round(center_values[i] - half[i], 12) for i in range(3)]
     box_max = [round(center_values[i] + half[i], 12) for i in range(3)]
-    safety = safety_section(document)
-    safety["workspace"] = {
+    box = {
         "frame": frame,
         "type": "box",
         "min": box_min,
@@ -102,12 +160,14 @@ def set_workspace_box(
         "margin": margin_value,
         "protected_frames": protected,
     }
+    _store_workspace(document, box, side)
 
 
-def remove_workspace_box(document: MutableMapping[str, Any]) -> None:
-    """Remove the workspace box, if present."""
-    safety = safety_section(document)
-    safety.pop("workspace", None)
+def remove_workspace_box(document: MutableMapping[str, Any], side: str = "") -> None:
+    """An empty side override disables its box without re-enabling a default."""
+    _store_workspace(document, {}, side)
+    if not side:
+        safety_section(document).pop("workspace", None)
 
 
 def set_virtual_wall(
@@ -198,24 +258,31 @@ def validate_safety_document(document: Mapping[str, Any]) -> None:
     if not isinstance(safety, Mapping):
         raise ProfileValidationError("safety 必须是 mapping")
 
-    workspace = safety.get("workspace")
-    if workspace is not None:
-        if not isinstance(workspace, Mapping):
-            raise ProfileValidationError("safety.workspace 必须是 mapping")
-        if workspace.get("type", "box") != "box":
-            raise ProfileValidationError("safety.workspace.type 必须为 box")
-        box_min = _vector(workspace.get("min", []), "workspace.min")
-        box_max = _vector(workspace.get("max", []), "workspace.max")
-        for index, (low, high) in enumerate(zip(box_min, box_max)):
-            if low >= high:
-                raise ProfileValidationError(
-                    f"workspace.min[{index}] 必须小于 max[{index}]"
-                )
-        margin = float(workspace.get("margin", 0.0))
-        if not math.isfinite(margin) or margin < 0.0:
-            raise ProfileValidationError("workspace.margin 必须是非负有限数字")
-        if not workspace.get("protected_frames"):
-            raise ProfileValidationError("workspace.protected_frames 不能为空")
+    raw_workspace = safety.get("workspace")
+    if raw_workspace is not None:
+        sided = _workspace_is_sided(raw_workspace)
+        boxes = raw_workspace.values() if sided else [raw_workspace]
+        for workspace in boxes:
+            if not isinstance(workspace, dict):
+                raise ProfileValidationError("workspace Box 必须为 mapping；用 {} 关闭")
+            if not workspace:
+                continue
+            if workspace.get("type", "box") != "box":
+                raise ProfileValidationError("safety.workspace.type 必须为 box")
+            box_min = _vector(workspace.get("min", []), "workspace.min")
+            box_max = _vector(workspace.get("max", []), "workspace.max")
+            for index, (low, high) in enumerate(zip(box_min, box_max)):
+                if low >= high:
+                    raise ProfileValidationError(
+                        f"workspace.min[{index}] 必须小于 max[{index}]"
+                    )
+            margin = float(workspace.get("margin", 0.0))
+            if not math.isfinite(margin) or margin < 0.0:
+                raise ProfileValidationError("workspace.margin 必须是非负有限数字")
+            if not workspace.get("frame") or any(low + margin >= high - margin for low, high in zip(box_min, box_max)):
+                raise ProfileValidationError("workspace 需要 frame 且 margin 后仍有非空空间")
+            if not workspace.get("protected_frames"):
+                raise ProfileValidationError("workspace.protected_frames 不能为空")
 
     walls = safety.get("virtual_walls", [])
     if not isinstance(walls, list):

@@ -21,7 +21,7 @@ ik:
   singularity_weight: 0.02                       # 奇异性惩罚权重
 
 handle:                                          # 手柄桥接参数
-  zoom_factor: 1.1                               # 手柄位姿增量缩放系数
+  zoom_factor: 1.25                              # 手柄位姿增量缩放系数
 
 safety:
   safety_frames:                                 # 压缩了左右摆动（大概正负20度）的工作空间，避免碰撞

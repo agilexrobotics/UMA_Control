@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+from dataclasses import replace
 import time
 import numpy as np
 import scipy.spatial.transform
@@ -23,12 +24,14 @@ try:
     from .transformations import (
         quaternion_from_euler,
         quaternion_from_matrix,
+        euler_from_matrix,
         euler_from_quaternion,
     )
 except ImportError:  # Support execution as the installed ROS script.
     from transformations import (
         quaternion_from_euler,
         quaternion_from_matrix,
+        euler_from_matrix,
         euler_from_quaternion,
     )
 try:
@@ -38,6 +41,8 @@ except ImportError:  # Support execution as the installed ROS script.
 try:
     from .teleop_state import (
         FeedbackSnapshot,
+        build_heading_mapping,
+        build_horizontal_target,
         build_translation_mapping,
         build_live_reference_matrices,
         feedback_is_fresh,
@@ -45,6 +50,8 @@ try:
 except ImportError:  # Support execution as the installed ROS script.
     from teleop_state import (
         FeedbackSnapshot,
+        build_heading_mapping,
+        build_horizontal_target,
         build_translation_mapping,
         build_live_reference_matrices,
         feedback_is_fresh,
@@ -732,6 +739,7 @@ class RosOperator(Node):
                 "必须提供 profile_path 参数,例如 tego_bringup/config/nero_profile.yaml"
             )
         self.profile = load_profile(profile_path)
+        self.profile = replace(self.profile, workspace_box=self.profile.workspace_for(self.side))
         self.installation_pos = self.profile.installation_pos_for(self.side)
         nq = self.profile.nq
 
@@ -852,6 +860,8 @@ class RosOperator(Node):
             0, 0, 0, 0, 0, 0
         )  # placeholder; updated later
         self.effective_translation_rotation = None
+        self.latest_handle_pose = None
+        self.latest_handle_pose_at = None
 
         self.is_teleop_active = False
         self.refresh_zero_matrix = True
@@ -904,6 +914,9 @@ class RosOperator(Node):
             self.inverse_solution.model, self.inverse_solution.data
         )
         oMf = self.inverse_solution.data.oMf[self.inverse_solution.gripper_id]
+        if self.installation_pos == "horizontal":
+            # IK accepts targets in profile.base_frame, which may differ from root.
+            return np.linalg.inv(self.inverse_solution._T_model_base) @ oMf.homogeneous
         return xyzrpy2Mat(*matrix2xyzrpy(oMf.homogeneous))
 
     def get_timestamp(self):
@@ -940,7 +953,7 @@ class RosOperator(Node):
             return None
         return positions
 
-    def _stop_teleop_for_stale_feedback(self):
+    def _stop_teleop(self, reason="实时关节反馈已超时，停止遥操"):
         was_active = self.is_teleop_active
         self.is_teleop_active = False
         self.refresh_zero_matrix = True
@@ -948,12 +961,12 @@ class RosOperator(Node):
         self.effective_translation_rotation = None
         self.sync_ik_state = False
         if was_active:
-            self.get_logger().warning("实时关节反馈已超时，停止遥操")
+            self.get_logger().warning(reason)
 
     def publish_joint_command(self, q):
         """按 profile 的 command_name 发布关节命令。"""
         if self.is_teleop_active and not self.has_fresh_feedback():
-            self._stop_teleop_for_stale_feedback()
+            self._stop_teleop()
             return False
         try:
             names, positions = self.profile.q_to_command(q)
@@ -994,9 +1007,34 @@ class RosOperator(Node):
         return joint_states
 
     def handle_pose_callback(self, msg):
+        if self.installation_pos == "horizontal":
+            # Cache while disabled so the trigger can validate and anchor atomically.
+            position = msg.pose.position
+            orientation = msg.pose.orientation
+            values = [
+                position.x,
+                position.y,
+                position.z,
+                orientation.x,
+                orientation.y,
+                orientation.z,
+                orientation.w,
+            ]
+            try:
+                if not np.isfinite(values).all():
+                    raise ValueError("位姿包含非有限数值")
+                current_matrix = xyzquat2Mat(values[:3], values[3:])
+            except ValueError:
+                self.latest_handle_pose = None
+                self.latest_handle_pose_at = None
+                self._stop_teleop("手柄位姿无效，停止遥操；请检查位姿后重新开启")
+                return
+            self.latest_handle_pose = current_matrix
+            self.latest_handle_pose_at = time.monotonic()
+
         if self.is_teleop_active:
             if not self.has_fresh_feedback():
-                self._stop_teleop_for_stale_feedback()
+                self._stop_teleop()
                 return
 
             x = msg.pose.position.x
@@ -1010,8 +1048,6 @@ class RosOperator(Node):
                     msg.pose.orientation.w,
                 ]
             )
-            current_pose = [x, y, z, roll, pitch, yaw]
-
             if not self.sync_ik_state and self.last_ik_joint_state is not None:
                 # print("sync ik by last")
                 self.sync_ik_state = True
@@ -1020,7 +1056,7 @@ class RosOperator(Node):
             if self.refresh_zero_matrix:
                 current_joint_positions = self._read_fresh_feedback()
                 if current_joint_positions is None:
-                    self._stop_teleop_for_stale_feedback()
+                    self._stop_teleop()
                     return
                 self.zero_matrix = build_live_reference_matrices(
                     current_joint_positions,
@@ -1038,16 +1074,27 @@ class RosOperator(Node):
                     self.start_pose_matrix[:3, :3],
                 )
 
-            # 目标 = 当前起点(zero_matrix)+ 手柄增量。
-            # 旋转:增量旋转叠加在当前姿态(标准增量遥操);
-            # 平移:先恢复到手柄 world 方向，再按物理安装方向映射到 base_link。
-            current_matrix = xyzrpy2Mat(x, y, z, roll, pitch, yaw)
-            delta = np.dot(np.linalg.inv(self.start_pose_matrix), current_matrix)
-            target_matrix = np.dot(self.zero_matrix, delta)
-            target_matrix[:3, 3] = self.zero_matrix[:3, 3] + np.dot(
-                self.effective_translation_rotation, delta[:3, 3]
-            )
-            arm_control_pose = matrix2xyzrpy(target_matrix)
+            if self.installation_pos == "horizontal":
+                target_matrix = build_horizontal_target(
+                    self.zero_matrix,
+                    self.start_pose_matrix,
+                    current_matrix,
+                    self.effective_translation_rotation,
+                )
+                # This conversion also handles pitch = +/- pi/2 without NaNs.
+                arm_control_pose = [
+                    *target_matrix[:3, 3],
+                    *euler_from_matrix(target_matrix),
+                ]
+            else:
+                # Preserve the legacy side-mount translation and orientation paths.
+                current_matrix = xyzrpy2Mat(x, y, z, roll, pitch, yaw)
+                delta = np.dot(np.linalg.inv(self.start_pose_matrix), current_matrix)
+                target_matrix = np.dot(self.zero_matrix, delta)
+                target_matrix[:3, 3] = self.zero_matrix[:3, 3] + np.dot(
+                    self.effective_translation_rotation, delta[:3, 3]
+                )
+                arm_control_pose = matrix2xyzrpy(target_matrix)
             self.last_ik_joint_state = self.get_ik_solution(
                 arm_control_pose[0],
                 arm_control_pose[1],
@@ -1061,7 +1108,7 @@ class RosOperator(Node):
 
     def publish_teleop_status_callback(self):
         if self.is_teleop_active and not self.has_fresh_feedback():
-            self._stop_teleop_for_stale_feedback()
+            self._stop_teleop()
 
         if self.is_teleop_active:
             if self.refresh_start_pose_matrix:
@@ -1081,8 +1128,32 @@ class RosOperator(Node):
 
         if not self.is_teleop_active and not self.has_fresh_feedback():
             response.success = False
-            response.message = "尚未收到新鲜的实时关节反馈，暂不能启动遥操"
+            response.message = "尚未收到实时关节反馈，暂不能启动遥操"
             return response
+
+        if not self.is_teleop_active and self.installation_pos == "horizontal":
+            if self.latest_handle_pose is None or not feedback_is_fresh(
+                self.latest_handle_pose_at, time.monotonic(), self.feedback_timeout_sec
+            ):
+                response.success = False
+                response.message = "尚未收到有效的手柄位姿，暂不能启动遥操"
+                return response
+            try:
+                mapping = build_heading_mapping(self.latest_handle_pose[:3, :3])
+                arm_start = build_live_reference_matrices(
+                    self._read_fresh_feedback(), self.get_ee_pose_matrix_by_urdf
+                )
+            except ValueError as exc:
+                response.success = False
+                response.message = str(exc)
+                self.get_logger().warning(response.message)
+                return response
+            # All callbacks use the default mutually exclusive callback group.
+            self.zero_matrix = arm_start
+            self.start_pose_matrix = self.latest_handle_pose.copy()
+            self.effective_translation_rotation = mapping
+            self.refresh_zero_matrix = False
+            self.refresh_start_pose_matrix = False
 
         self.is_teleop_active = not self.is_teleop_active
 

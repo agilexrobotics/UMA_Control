@@ -103,7 +103,7 @@ class RobotProfile:
     safety_frames: Dict[str, SafetyFrame] = field(default_factory=dict)
     ee_frame: Optional[str] = None
     ee_offset: Optional[EEOffset] = None
-    workspace_box: Optional[WorkspaceBox] = None
+    workspace_box: Union[WorkspaceBox, Dict[str, Optional[WorkspaceBox]], None] = None
     virtual_walls: List[PlaneWall] = field(default_factory=list)
     collision_pairs: List[List[int]] = field(default_factory=list)
     arm_home_state: Dict[str, List[float]] = field(default_factory=dict)
@@ -112,7 +112,7 @@ class RobotProfile:
     # 通用物理安装朝向；可按通信 side 配置。支持的驱动还会用它配置重力补偿。
     installation_pos: Union[str, Dict[str, str]] = "horizontal"
     # None 保留各 launch 的旧默认值；none 显式关闭末端执行器。
-    effector_type: Optional[str] = None
+    effector_type: Union[str, Dict[str, str], None] = None
     enable_hard_delta_q_constraint: bool = True
     max_delta_q_rad: float = 0.15
     enable_psi_constraint: bool = False
@@ -187,6 +187,52 @@ class RobotProfile:
         return validate_installation_pos(
             value, f"robot.installation_pos.{side}"
         )
+
+    def effector_type_for(self, side: str) -> Optional[str]:
+        return _side_value(self.effector_type, side, "robot.effector_type")
+
+    def workspace_for(self, side: str) -> Optional[WorkspaceBox]:
+        return _side_value(self.workspace_box, side, "safety.workspace")
+
+
+def _side_value(value, side, context):
+    if side not in ("left", "right"):
+        raise ValueError(f"unsupported arm side: {side}")
+    if not isinstance(value, dict):
+        return value
+    if side in value:
+        return value[side]
+    if "default" in value:
+        return value["default"]
+    raise ValueError(f"{context} 缺少键: {side}(或 default)")
+
+
+def _parse_side_values(raw, parse, context):
+    if not isinstance(raw, dict) or not raw or set(raw) - {"left", "right", "default"}:
+        raise ValueError(f"{context} 必须为非空 left/right/default 映射")
+    return {key: parse(value) for key, value in raw.items()}
+
+
+def _parse_workspace(raw):
+    if not isinstance(raw, dict):
+        raise ValueError("safety.workspace 必须为映射；用 {} 显式关闭某侧 workspace")
+    if not raw:
+        return None
+    if raw.get("type", "box") != "box":
+        raise ValueError("safety.workspace.type 必须为 box")
+    try:
+        low = np.asarray(raw.get("min", []), dtype=float)
+        high = np.asarray(raw.get("max", []), dtype=float)
+        margin = float(raw.get("margin", 0.0))
+        valid = (low.shape == high.shape == (3,) and np.isfinite(low).all()
+                 and np.isfinite(high).all() and math.isfinite(margin)
+                 and margin >= 0 and np.all(low + margin < high - margin))
+    except (TypeError, ValueError):
+        valid = False
+    if not valid or not raw.get("frame") or not raw.get("protected_frames"):
+        raise ValueError("safety.workspace 需要有效 frame、保护点和有限非空边界（含 margin）")
+    return WorkspaceBox(raw["frame"], low.tolist(), high.tolist(), margin,
+                        list(raw["protected_frames"]))
 
 
 def _resolve_urdf_path(urdf_path: str):
@@ -339,8 +385,10 @@ def validate(profile: RobotProfile) -> None:
                 f"collision_pairs 索引越界: ({i},{j}), 有效范围 0..{max_link_idx}"
             )
 
-    if profile.workspace_box is not None:
-        box = profile.workspace_box
+    boxes = profile.workspace_box
+    for box in (boxes.values() if isinstance(boxes, dict) else [boxes]):
+        if box is None:
+            continue
         if len(box.min) != 3 or len(box.max) != 3:
             raise ValueError("safety.workspace.min/max 必须为 3 元素")
         if box.margin < 0.0:
@@ -426,20 +474,14 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
             list(off.get("rpy", [])),
         )
 
-    workspace_box = None
     safety_raw = raw.get("safety") or {}
     ws_raw = safety_raw.get("workspace") or {}
-    if ws_raw:
-        ws_type = ws_raw.get("type", "box")
-        if ws_type != "box":
-            raise ValueError(f"safety.workspace.type 必须为 box, got {ws_type}")
-        workspace_box = WorkspaceBox(
-            frame=ws_raw.get("frame", ""),
-            min=list(ws_raw.get("min", [])),
-            max=list(ws_raw.get("max", [])),
-            margin=float(ws_raw.get("margin", 0.0)),
-            protected_frames=list(ws_raw.get("protected_frames") or []),
-        )
+    if isinstance(ws_raw, dict) and ws_raw and not {"frame", "type", "min", "max", "margin", "protected_frames"}.intersection(ws_raw):
+        workspace_box = _parse_side_values(ws_raw, _parse_workspace, "safety.workspace")
+    else:
+        if isinstance(ws_raw, dict) and {"left", "right", "default"}.intersection(ws_raw):
+            raise ValueError("safety.workspace 不能混合共享 Box 和左右配置")
+        workspace_box = _parse_workspace(ws_raw)
 
     virtual_walls = []
     for w_raw in safety_raw.get("virtual_walls") or []:
@@ -497,7 +539,9 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
         handle=raw.get("handle") or {},
         installation_pos=_parse_installation_pos(robot_raw),
         effector_type=(
-            validate_effector_type(robot_raw["effector_type"])
+            (_parse_side_values(robot_raw["effector_type"], validate_effector_type, "robot.effector_type")
+             if isinstance(robot_raw["effector_type"], dict)
+             else validate_effector_type(robot_raw["effector_type"]))
             if "effector_type" in robot_raw
             else None
         ),

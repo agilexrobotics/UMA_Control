@@ -31,7 +31,7 @@ def _arm_include(side, can_port, node_name, installation_pos, topics_end):
         launch_arguments={
             "can_port": can_port,
             "arm_type": LaunchConfiguration("arm_type"),
-            "effector_type": LaunchConfiguration("effector_type"),
+            "effector_type": LaunchConfiguration(f"{side}_effector_type"),
             "auto_enable": LaunchConfiguration("auto_enable"),
             "speed_percent": LaunchConfiguration("speed_percent"),
             "pub_rate": LaunchConfiguration("pub_rate"),
@@ -59,6 +59,8 @@ def generate_launch_description() -> LaunchDescription:
                 "End-effector implementation used by both controllers.",
                 EFFECTOR_TYPES,
             ),
+            _arg("left_effector_type", LaunchConfiguration("effector_type"), "Left end effector.", EFFECTOR_TYPES),
+            _arg("right_effector_type", LaunchConfiguration("effector_type"), "Right end effector.", EFFECTOR_TYPES),
             _arg(
                 "auto_enable",
                 "true",

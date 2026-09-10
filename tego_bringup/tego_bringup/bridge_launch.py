@@ -61,7 +61,6 @@ def _side_values(side: str, arm_type: str) -> Dict[str, object]:
         "nero_gripper_topic_name": f"/control/joint_states_{side}",
         "use_piper_mode": arm_type == "piper",
         "gripper_length": gripper_length,
-        "arm_home_state_key": side if arm_type == "nero" else "default",
         "default_profile": f"{arm_type}_profile.yaml",
         "default_zoom_factor": 1.4 if arm_type == "nero" else 1.1,
         "default_effector_type": "agx_gripper" if arm_type == "nero" else "none",
@@ -75,13 +74,13 @@ def _profile_values(context, profile_path, side, arm_type):
     path = Path(profile_path.perform(context))
     profile = load_profile(str(path), validate_robot=False)
     values["arm_home_state"] = format_arm_home_state(
-        profile, values.pop("arm_home_state_key")
+        profile, side
     )
     values["zoom_factor"] = float(
         (profile.handle or {}).get("zoom_factor", values.pop("default_zoom_factor"))
     )
     values["effector_type"] = (
-        profile.effector_type or values.pop("default_effector_type")
+        profile.effector_type_for(side) or values.pop("default_effector_type")
     )
     values.pop("default_profile")
     return values

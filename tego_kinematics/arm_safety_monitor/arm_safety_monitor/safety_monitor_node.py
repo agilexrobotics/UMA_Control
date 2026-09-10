@@ -29,6 +29,7 @@ from .profile_io import (
     load_profile_document,
     remove_virtual_wall,
     remove_workspace_box,
+    workspace_for,
     set_virtual_wall,
     set_workspace_box,
     flip_virtual_wall_normal,
@@ -50,6 +51,10 @@ class SafetyMonitorNode(Node):
     def __init__(self) -> None:
         super().__init__("arm_safety_monitor")
         self.declare_parameter("profile_path", "")
+        self.declare_parameter("side", "")
+        self.side = self.get_parameter("side").value
+        if self.side not in ("", "left", "right"):
+            raise ValueError("side 必须为 left/right")
         self.declare_parameter("box_resize_step", 0.05)
         self.declare_parameter("plane_size", 0.8)
         self.declare_parameter("default_box_size", [0.6, 0.6, 0.6])
@@ -136,7 +141,7 @@ class SafetyMonitorNode(Node):
         self.server.clear()
         self._insert_menu_marker()
         safety = self.document.get("safety", {})
-        workspace = safety.get("workspace") if isinstance(safety, dict) else None
+        workspace = workspace_for(self.document, self.side)
         if isinstance(workspace, dict):
             self._insert_workspace_marker(workspace)
         walls = safety.get("virtual_walls", []) if isinstance(safety, dict) else []
@@ -248,10 +253,11 @@ class SafetyMonitorNode(Node):
     def _update_from_pose(self, feedback: InteractiveMarkerFeedback) -> None:
         pose = feedback.pose
         if feedback.marker_name == "workspace_box":
-            workspace = self.document["safety"]["workspace"]
+            workspace = workspace_for(self.document, self.side)
             _, size = box_center_size(workspace["min"], workspace["max"])
             set_workspace_box(
                 self.document,
+                side=self.side,
                 frame=str(workspace.get("frame", self.base_frame)),
                 center=[pose.position.x, pose.position.y, pose.position.z],
                 size=size,
@@ -314,7 +320,7 @@ class SafetyMonitorNode(Node):
                 )
                 self._rebuild_markers()
         elif selected == self.MENU_DELETE_WORKSPACE:
-            remove_workspace_box(self.document)
+            remove_workspace_box(self.document, side=self.side)
             self._rebuild_markers()
         elif selected == self.MENU_DELETE_WALL and feedback.marker_name.startswith("wall_"):
             remove_virtual_wall(self.document, feedback.marker_name[len("wall_"):])
@@ -323,7 +329,7 @@ class SafetyMonitorNode(Node):
             self._resize_workspace(selected)
 
     def _resize_workspace(self, menu_name: str) -> None:
-        workspace = self.document.get("safety", {}).get("workspace")
+        workspace = workspace_for(self.document, self.side, editable=True)
         if not isinstance(workspace, dict):
             self.get_logger().warning("当前没有 workspace Box")
             return
@@ -342,6 +348,7 @@ class SafetyMonitorNode(Node):
     def _create_workspace(self) -> None:
         set_workspace_box(
             self.document,
+            side=self.side,
             frame=self.base_frame,
             center=[0.0, 0.0, 0.25],
             size=self.default_box_size,

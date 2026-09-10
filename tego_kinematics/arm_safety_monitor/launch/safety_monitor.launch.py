@@ -161,6 +161,7 @@ def _arm_safety_monitor_from_profile(context, *args, **kwargs):
             parameters=[
                 {
                     "profile_path": str(profile_path),
+                    "side": LaunchConfiguration("side"),
                     "box_resize_step": LaunchConfiguration("box_resize_step"),
                     "plane_size": LaunchConfiguration("plane_size"),
                 }
@@ -177,6 +178,7 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument("side", default_value="", choices=["", "left", "right"]),
             DeclareLaunchArgument(
                 "profile_name",
                 default_value="piper_profile.yaml",

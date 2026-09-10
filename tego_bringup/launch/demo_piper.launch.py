@@ -24,7 +24,7 @@ from tego_bringup.bridge_launch import bridge_wrapper_name
 def resolve_driver_settings(profile_path: str, side: str):
     """Resolve profile values passed to the example arm driver."""
     profile = load_profile(str(Path(profile_path)), validate_robot=False)
-    return profile.installation_pos_for(side), profile.effector_type or "none"
+    return profile.installation_pos_for(side), profile.effector_type_for(side) or "none"
 
 
 def generate_launch_description() -> LaunchDescription:

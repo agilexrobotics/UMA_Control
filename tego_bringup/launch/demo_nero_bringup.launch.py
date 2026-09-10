@@ -31,7 +31,6 @@ def generate_launch_description() -> LaunchDescription:
         profile = load_profile(
             str(Path(profile_path.perform(context))), validate_robot=False
         )
-        effector_type = profile.effector_type or "agx_gripper"
         return [
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -46,7 +45,8 @@ def generate_launch_description() -> LaunchDescription:
                 launch_arguments={
                     "left_can_port": left_arm_port,
                     "right_can_port": right_arm_port,
-                    "effector_type": effector_type,
+                    "left_effector_type": profile.effector_type_for("left") or "agx_gripper",
+                    "right_effector_type": profile.effector_type_for("right") or "agx_gripper",
                     "log_level": log_level,
                 }.items(),
                 condition=IfCondition(start_arm),

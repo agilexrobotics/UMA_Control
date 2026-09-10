@@ -50,6 +50,32 @@ def build_translation_mapping(
     return correction, correction @ home
 
 
+def build_heading_mapping(handle_start_rotation) -> np.ndarray:
+    """Map the initial horizontal heading to base +X, keeping world +Z up.
+
+    The bridge's calibrated world frame must already have a valid up reference.
+    Reject a forward axis within 15 degrees of vertical: heading is unreliable.
+    """
+    rotation = _rotation_matrix(handle_start_rotation, "handle_start_rotation")
+    forward = rotation[:, 0].copy()
+    forward[2] = 0.0
+    length = np.linalg.norm(forward)
+    if length <= math.sin(math.radians(15)):
+        raise ValueError("手柄朝向接近竖直，请将手柄放平后重新开启")
+    forward /= length
+    up = np.array([0.0, 0.0, 1.0])
+    return np.vstack((forward, np.cross(up, forward), up))
+
+
+def build_horizontal_target(arm_start, handle_start, handle_current, mapping):
+    """Apply spatial pose increments through a mapping frozen at enable."""
+    target = arm_start.copy()
+    target[:3, 3] += mapping @ (handle_current[:3, 3] - handle_start[:3, 3])
+    rotation_delta = handle_current[:3, :3] @ handle_start[:3, :3].T
+    target[:3, :3] = mapping @ rotation_delta @ mapping.T @ arm_start[:3, :3]
+    return target
+
+
 class FeedbackSnapshot:
     """Thread-safe latest joint-feedback snapshot."""
 
