@@ -10,6 +10,7 @@ from launch_ros.substitutions import FindPackageShare
 ARM_TYPES = ["nero", "piper", "piper_h", "piper_l", "piper_x"]
 EFFECTOR_TYPES = ["none", "agx_gripper", "revo2"]
 INSTALLATION_POSITIONS = ["horizontal", "left", "right"]
+FIRMWARE_VERSIONS = ["default", "v111", "v112", "v120", "v121", "v183", "v188", "v189"]
 PAYLOAD_TYPES = ["empty", "half", "full"]
 BOOL_CHOICES = ["true", "false"]
 
@@ -37,6 +38,7 @@ def _arm_include(side, can_port, node_name, installation_pos, topics_end):
             "pub_rate": LaunchConfiguration("pub_rate"),
             "enable_timeout": LaunchConfiguration("enable_timeout"),
             "installation_pos": installation_pos,
+            "firmware_version": LaunchConfiguration("firmware_version"),
             "payload": LaunchConfiguration("payload"),
             "tcp_offset": LaunchConfiguration("tcp_offset"),
             "publish_gripper_joint": LaunchConfiguration("publish_gripper_joint"),
@@ -78,6 +80,12 @@ def generate_launch_description() -> LaunchDescription:
                 "horizontal",
                 "Installation orientation for the right arm.",
                 INSTALLATION_POSITIONS,
+            ),
+            _arg(
+                "firmware_version",
+                "default",
+                "pyAgxArm driver firmware profile shared by both arms.",
+                FIRMWARE_VERSIONS,
             ),
             _arg("speed_percent", "100", "Motion speed percentage."),
             _arg("pub_rate", "200.0", "Feedback publication rate in Hz."),

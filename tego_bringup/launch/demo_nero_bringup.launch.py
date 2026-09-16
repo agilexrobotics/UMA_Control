@@ -47,6 +47,7 @@ def generate_launch_description() -> LaunchDescription:
                     "right_can_port": right_arm_port,
                     "left_effector_type": profile.effector_type_for("left") or "agx_gripper",
                     "right_effector_type": profile.effector_type_for("right") or "agx_gripper",
+                    "firmware_version": profile.firmware_version,
                     "log_level": log_level,
                 }.items(),
                 condition=IfCondition(start_arm),

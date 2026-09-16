@@ -12,10 +12,19 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import yaml
 
-
 INSTALLATION_POSITIONS = ("horizontal", "left", "right")
 INSTALLATION_POSITION_KEYS = ("default", "left", "right")
 EFFECTOR_TYPES = ("none", "agx_gripper", "revo2")
+FIRMWARE_VERSIONS = (
+    "default",
+    "v111",  # nero = 1.11
+    "v112",  # nero = 1.12
+    "v120",  # nero = 1.20
+    "v121",  # nero >= 1.21
+    "v183",  # piper S-V1.8-3 ~ S-V1.8-7
+    "v188",  # piper S-V1.8-8
+    "v189",  # piper >= S-V1.8-9
+)
 
 
 def validate_installation_pos(value: Any, context: str = "installation_pos") -> str:
@@ -23,6 +32,14 @@ def validate_installation_pos(value: Any, context: str = "installation_pos") -> 
     if not isinstance(value, str) or value not in INSTALLATION_POSITIONS:
         allowed = ", ".join(INSTALLATION_POSITIONS)
         raise ValueError(f"{context} 必须为 {allowed}, got {value!r}")
+    return value
+
+
+def validate_firmware_version(value: Any) -> str:
+    """Validate and return one pyAgxArm driver firmware profile."""
+    if not isinstance(value, str) or value not in FIRMWARE_VERSIONS:
+        allowed = ", ".join(FIRMWARE_VERSIONS)
+        raise ValueError(f"robot.firmware_version 必须为 {allowed}, got {value!r}")
     return value
 
 
@@ -107,11 +124,9 @@ class RobotProfile:
     virtual_walls: List[PlaneWall] = field(default_factory=list)
     collision_pairs: List[List[int]] = field(default_factory=list)
     arm_home_state: Dict[str, List[float]] = field(default_factory=dict)
-    # 手柄桥接参数(tego_ros 节点),如 zoom_factor;由手柄 launch 读取
     handle: Dict[str, Any] = field(default_factory=dict)
-    # 通用物理安装朝向；可按通信 side 配置。支持的驱动还会用它配置重力补偿。
     installation_pos: Union[str, Dict[str, str]] = "horizontal"
-    # None 保留各 launch 的旧默认值；none 显式关闭末端执行器。
+    firmware_version: str = "default"
     effector_type: Union[str, Dict[str, str], None] = None
     enable_hard_delta_q_constraint: bool = True
     max_delta_q_rad: float = 0.15
@@ -181,12 +196,8 @@ class RobotProfile:
         if value is None:
             value = self.installation_pos.get("default")
         if value is None:
-            raise ValueError(
-                f"robot.installation_pos 缺少键: {side}(或 default)"
-            )
-        return validate_installation_pos(
-            value, f"robot.installation_pos.{side}"
-        )
+            raise ValueError(f"robot.installation_pos 缺少键: {side}(或 default)")
+        return validate_installation_pos(value, f"robot.installation_pos.{side}")
 
     def effector_type_for(self, side: str) -> Optional[str]:
         return _side_value(self.effector_type, side, "robot.effector_type")
@@ -224,15 +235,23 @@ def _parse_workspace(raw):
         low = np.asarray(raw.get("min", []), dtype=float)
         high = np.asarray(raw.get("max", []), dtype=float)
         margin = float(raw.get("margin", 0.0))
-        valid = (low.shape == high.shape == (3,) and np.isfinite(low).all()
-                 and np.isfinite(high).all() and math.isfinite(margin)
-                 and margin >= 0 and np.all(low + margin < high - margin))
+        valid = (
+            low.shape == high.shape == (3,)
+            and np.isfinite(low).all()
+            and np.isfinite(high).all()
+            and math.isfinite(margin)
+            and margin >= 0
+            and np.all(low + margin < high - margin)
+        )
     except (TypeError, ValueError):
         valid = False
     if not valid or not raw.get("frame") or not raw.get("protected_frames"):
-        raise ValueError("safety.workspace 需要有效 frame、保护点和有限非空边界（含 margin）")
-    return WorkspaceBox(raw["frame"], low.tolist(), high.tolist(), margin,
-                        list(raw["protected_frames"]))
+        raise ValueError(
+            "safety.workspace 需要有效 frame、保护点和有限非空边界（含 margin）"
+        )
+    return WorkspaceBox(
+        raw["frame"], low.tolist(), high.tolist(), margin, list(raw["protected_frames"])
+    )
 
 
 def _resolve_urdf_path(urdf_path: str):
@@ -289,10 +308,14 @@ def _parse_installation_pos(robot_raw: dict) -> Union[str, Dict[str, str]]:
             raise ValueError(
                 f"robot.installation_pos 映射键必须为 {allowed}, got {key!r}"
             )
-        parsed[key] = validate_installation_pos(
-            value, f"robot.installation_pos.{key}"
-        )
+        parsed[key] = validate_installation_pos(value, f"robot.installation_pos.{key}")
     return parsed
+
+
+def _parse_firmware_version(robot_raw: dict) -> str:
+    if "firmware_version" not in robot_raw:
+        return "default"
+    return validate_firmware_version(robot_raw["firmware_version"])
 
 
 def _frame_exists(model, name: str) -> bool:
@@ -476,10 +499,23 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
 
     safety_raw = raw.get("safety") or {}
     ws_raw = safety_raw.get("workspace") or {}
-    if isinstance(ws_raw, dict) and ws_raw and not {"frame", "type", "min", "max", "margin", "protected_frames"}.intersection(ws_raw):
+    if (
+        isinstance(ws_raw, dict)
+        and ws_raw
+        and not {
+            "frame",
+            "type",
+            "min",
+            "max",
+            "margin",
+            "protected_frames",
+        }.intersection(ws_raw)
+    ):
         workspace_box = _parse_side_values(ws_raw, _parse_workspace, "safety.workspace")
     else:
-        if isinstance(ws_raw, dict) and {"left", "right", "default"}.intersection(ws_raw):
+        if isinstance(ws_raw, dict) and {"left", "right", "default"}.intersection(
+            ws_raw
+        ):
             raise ValueError("safety.workspace 不能混合共享 Box 和左右配置")
         workspace_box = _parse_workspace(ws_raw)
 
@@ -538,10 +574,17 @@ def load_profile(path: str, validate_robot: bool = True) -> RobotProfile:
         collision_pairs=[list(p) for p in (robot_raw.get("collision_pairs") or [])],
         handle=raw.get("handle") or {},
         installation_pos=_parse_installation_pos(robot_raw),
+        firmware_version=_parse_firmware_version(robot_raw),
         effector_type=(
-            (_parse_side_values(robot_raw["effector_type"], validate_effector_type, "robot.effector_type")
-             if isinstance(robot_raw["effector_type"], dict)
-             else validate_effector_type(robot_raw["effector_type"]))
+            (
+                _parse_side_values(
+                    robot_raw["effector_type"],
+                    validate_effector_type,
+                    "robot.effector_type",
+                )
+                if isinstance(robot_raw["effector_type"], dict)
+                else validate_effector_type(robot_raw["effector_type"])
+            )
             if "effector_type" in robot_raw
             else None
         ),

@@ -12,6 +12,7 @@ from launch_ros.actions import Node
 ARM_TYPES = ["nero", "piper", "piper_h", "piper_l", "piper_x"]
 EFFECTOR_TYPES = ["none", "agx_gripper", "revo2"]
 INSTALLATION_POSITIONS = ["horizontal", "left", "right"]
+FIRMWARE_VERSIONS = ["default", "v111", "v112", "v120", "v121", "v183", "v188", "v189"]
 PAYLOAD_TYPES = ["empty", "half", "full"]
 BOOL_CHOICES = ["true", "false"]
 
@@ -48,6 +49,7 @@ def generate_launch_description() -> LaunchDescription:
                 "pub_rate": LaunchConfiguration("pub_rate"),
                 "enable_timeout": LaunchConfiguration("enable_timeout"),
                 "installation_pos": LaunchConfiguration("installation_pos"),
+                "firmware_version": LaunchConfiguration("firmware_version"),
                 "payload": LaunchConfiguration("payload"),
                 "tcp_offset": LaunchConfiguration("tcp_offset"),
                 "publish_gripper_joint": LaunchConfiguration("publish_gripper_joint"),
@@ -114,6 +116,12 @@ def generate_launch_description() -> LaunchDescription:
                 "horizontal",
                 "Arm installation orientation used for gravity compensation.",
                 INSTALLATION_POSITIONS,
+            ),
+            _arg(
+                "firmware_version",
+                "default",
+                "pyAgxArm driver firmware profile; must match the arm firmware.",
+                FIRMWARE_VERSIONS,
             ),
             _arg(
                 "speed_percent",

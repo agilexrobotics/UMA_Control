@@ -2,12 +2,16 @@ robot:
   name: nero
   urdf_path: package://tego_description/urdf/nero/urdf/nero_description.urdf  # URDF 路径
   base_frame: base_link                            # IK 目标位姿的参考坐标系，默认base_link
+  firmware_version: default                           # pyAgxArm 固件版本
+                                                   # 可选: default(<=1.10) | v111(1.11) | v112(1.12)
+                                                   #      | v120(1.20) | v121(>=1.21)
+                                                   # 填错会按错误协议解析 CAN，务必先确认固件版本
   installation_pos:                                # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
     left: left
     right: right
-  effector_type:                                  # none / agx_gripper / revo2
-    left: none
-    right: none
+  effector_type:                                   # none / agx_gripper / revo2
+    left: agx_gripper
+    right: agx_gripper
   speed_percent: 100                               # 双臂运动速度百分比，范围 0~100
   ee_offset:                                       # 末端工具坐标系，URDF没有时用此偏移
     parent_joint: joint7                           # 挂在哪个关节上
@@ -18,8 +22,8 @@ robot:
 
   # 双臂使用 left/right，并分别填写对应一侧，不要填写两侧通道数量之和
   arm_home_state:
-    left: [0.1, 1.5708, -1.5708, 1.6707, 0.0, 0.0, 0.0]
-    right: [-0.1, 1.5708, 1.5708, 1.6707, 0.0, 0.0, 0.0]
+    left: [0.1, 1.5708, -1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+    right: [-0.1, 1.5708, 1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
 
 ik:
   enable_hard_delta_q_constraint: true             # 是否启用单帧最大关节变化硬约束

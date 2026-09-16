@@ -24,7 +24,11 @@ from tego_bringup.bridge_launch import bridge_wrapper_name
 def resolve_driver_settings(profile_path: str, side: str):
     """Resolve profile values passed to the example arm driver."""
     profile = load_profile(str(Path(profile_path)), validate_robot=False)
-    return profile.installation_pos_for(side), profile.effector_type_for(side) or "none"
+    return (
+        profile.installation_pos_for(side),
+        profile.effector_type_for(side) or "none",
+        profile.firmware_version,
+    )
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -43,7 +47,7 @@ def generate_launch_description() -> LaunchDescription:
     def build(context):
         side_val = side.perform(context)
         backend_val = backend.perform(context)
-        installation_pos, effector_type = resolve_driver_settings(
+        installation_pos, effector_type, firmware_version = resolve_driver_settings(
             profile_path.perform(context), side_val
         )
         wrapper = bridge_wrapper_name("piper", side_val, backend_val)
@@ -63,6 +67,7 @@ def generate_launch_description() -> LaunchDescription:
                     "arm_type": "piper",
                     "effector_type": effector_type,
                     "installation_pos": installation_pos,
+                    "firmware_version": firmware_version,
                     "topics_end": f"_{side_val}",
                     "log_level": log_level,
                 }.items(),
