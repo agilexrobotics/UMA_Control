@@ -225,9 +225,11 @@ Side-mounted translation retains the handle `world` to arm `base_link` mapping:
 
 `arm_home_state` remains the home command and side-mount FK reference; the live session origin comes from current joint feedback. Each list contains one arm's driver channels, with the first `nq` entries in URDF arm order. The bundled Piper profile has 9 entries (6 arm + 3 end-effector channels); Nero has 10 per side (7 arm + 3 end-effector channels). These lengths must match the driver feedback.
 
+`firmware_version` specifies the CAN protocol variant for pyAgxArm. It must match the arm's actual firmware or CAN parsing will fail. Nero: `default` (≤1.10), `v111` (1.11), `v112` (1.12), `v120` (1.20), `v121` (≥1.21). Piper: `default` (≤S-V1.8-2), `v183` (S-V1.8-3~7), `v188` (S-V1.8-8), `v189` (≥S-V1.8-9). Check your firmware version before deployment.
+
 | Profile block | What to configure |
 | --- | --- |
-| `robot` | URDF, base/tool frames, end effector, home state and mounting |
+| `robot` | URDF, base/tool frames, end effector, firmware version, home state and mounting |
 | `ik` | Per-step joint change limit, posture and singularity penalties |
 | `handle` | `zoom_factor`: Nero 1.4, Piper 1.1 in the bundled profiles |
 | `safety` | Workspace box, virtual walls and protected points |
@@ -590,9 +592,11 @@ Piper 同时收到 `installation_pos`，用于控制器重力补偿。
 
 `arm_home_state` 继续作为回零命令和侧装 FK 参考；本次遥操起点来自实时关节反馈。每个列表只填一侧的驱动通道，前 `nq` 项按 URDF 臂关节顺序排列。示例 Piper 为 9 项（6 个臂关节 + 3 个末端通道），Nero 每侧为 10 项（7 个臂关节 + 3 个末端 通道），回零列表长度需与实际驱动反馈一致。
 
+`firmware_version` 指定 pyAgxArm 的 CAN 协议版本，必须与机械臂实际固件一致，否则 CAN 解析失败。Nero：`default`（≤1.10）、`v111`（1.11）、`v112`（1.12）、`v120`（1.20）、`v121`（≥1.21）。Piper：`default`（≤S-V1.8-2）、`v183`（S-V1.8-3~7）、`v188`（S-V1.8-8）、`v189`（≥S-V1.8-9）。部署前请确认固件版本。
+
 | Profile 区块 | 配置内容 |
 | --- | --- |
-| `robot` | URDF、基座/末端 frame、末端执行器、回零状态和安装方向 |
+| `robot` | URDF、基座/末端 frame、末端执行器、固件版本、回零状态和安装方向 |
 | `ik` | 单帧关节变化限制、构型和奇异性惩罚 |
 | `handle` | `zoom_factor`，示例 Nero 为 1.4，Piper 为 1.1 |
 | `safety` | 工作空间 Box、虚拟墙和保护点 |
