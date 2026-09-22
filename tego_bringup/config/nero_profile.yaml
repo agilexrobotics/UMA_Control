@@ -81,3 +81,4 @@ safety:
       margin: 0.02
       protected_frames:
       - ee
+      - link4

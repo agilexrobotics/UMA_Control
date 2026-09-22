@@ -29,7 +29,13 @@ cd ~/tego/src
 git clone https://github.com/agilexrobotics/tego_control.git
 git clone https://github.com/agilexrobotics/tego_sdk.git
 cd ~/tego
+bash src/tego_control/build.sh
 ```
+
+The script is interactive, with two modes: **full build** — dependencies, workspace and verification — and **rebuild**, which deletes `build/ install/ log/` first and then rebuilds and verifies. A full build also asks which bridge to deploy.
+
+Both bridge backends use Python IK, so both need the `tego` Conda environment.
+Choosing `cpp` only drops `python-can` and the Python SDK, which the Python bridge alone uses; the C++ packages are always built by colcon.
 
 | Package / directory | Responsibility |
 | --- | --- |
@@ -40,63 +46,6 @@ cd ~/tego
 | `tego_kinematics/arm_safety_monitor` | Offline RViz safety-space editor |
 | `tego_description` | Example URDFs, meshes and RViz configuration |
 | `../tego_sdk` | Independent repository for the handle CAN protocol |
-
-ROS 2 Humble, colcon, SocketCAN, Eigen, Boost, KDL, and NLopt are required. The IK and example arm drivers also require a Python 3.10 environment with Pinocchio, CasADi, SciPy, and `pyAgxArm`.
-
-```bash
-sudo apt update
-sudo apt install -y \
-  python3-colcon-common-extensions python3-colcon-recursive-crawl \
-  python3-rosdep python3-catkin-pkg python3-pip \
-  python3-numpy python3-scipy python3-tk python3-matplotlib \
-  can-utils ethtool iproute2 \
-  libboost-all-dev libeigen3-dev liborocos-kdl-dev \
-  libnlopt-dev libnlopt-cxx-dev
-
-CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
-source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda create -n tego python=3.10 -y
-conda activate tego
-conda install "pinocchio=3.2.0" "casadi=3.6.7" scipy \
-  typing_extensions exceptiongroup -y
-python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
-  pyyaml opencv-python ur-rtde netifaces meshcat
-python -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
-```
-
-Both bridge backends use Python IK, so both need the `tego` environment. Install IK and driver dependencies there; ROS 2 itself comes from the system installation. Check that `python` points to `envs/tego/bin/python`:
-
-```bash
-python -c "import sys; print(sys.executable)"
-python -c "import pinocchio, casadi, scipy, pyAgxArm; print('IK and driver dependencies OK')"
-```
-
-Build both repositories. The explicit system Python path is for ROS build tools and message generation:
-
-```bash
-cd ~/tego
-source /opt/ros/humble/setup.bash
-rosdep update
-rosdep install --from-paths src/tego_control src/tego_sdk \
-  --ignore-src -r -y
-colcon build \
-  --base-paths src/tego_control src/tego_sdk \
-  --symlink-install \
-  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -DBUILD_TESTING=OFF
-source install/setup.bash
-```
-
-The Python bridge additionally needs:
-
-```bash
-conda activate tego
-export PYTHONNOUSERSITE=1
-python -m pip install python-can
-python -m pip install -e ~/tego/src/tego_sdk/python
-python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
-```
-
-The Python bridge also needs this ROS workspace build. The C++ bridge does not need `python-can` or the Python SDK. Check package discovery with `colcon list` and `ros2 pkg prefix tego_ros`.
 
 </details>
 
@@ -143,12 +92,20 @@ All four `start_*.sh` scripts automatically activate the `tego` Conda environmen
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
 
-# Piper single arm; the right route is the default
+# Nero single arm (horizontal mounting); the right route is the default
+bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_python.sh
+
+# Piper single arm (horizontal mounting); the right route is the default
+bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_python.sh
+
+# Legacy single Piper (uses old profile)
 bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
 bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
 
 # Left CAN pair / 左侧 CAN 接口
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh \
+SIDE=left bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh \
   arm_port:=left_arm port_name:=left_tego
 ```
 
@@ -377,7 +334,7 @@ For import failures, inspect `which python3` and rerun the dependency checks in 
 <details>
 <summary><strong>工作空间、依赖与构建</strong></summary>
 
-`tego_control` 和 `tego_sdk` 是两个独立 Git 仓库，建议放在同一个 ROS 2 工作空间：
+`tego_control` 和 `tego_sdk` 是两个独立 Git 仓库，放在同一个 ROS 2 工作空间：
 
 ```text
 ~/tego/
@@ -394,7 +351,12 @@ cd ~/tego/src
 git clone https://github.com/agilexrobotics/tego_control.git
 git clone https://github.com/agilexrobotics/tego_sdk.git
 cd ~/tego
+bash src/tego_control/build.sh
 ```
+
+脚本是交互式的，只有两种模式：**完整构建**（依赖 + 工作区 + 校验）和**重新构建**（先删除 `build/ install/ log/`，再重新构建并校验）。完整构建还会询问部署哪个 bridge。
+
+两种 bridge 都使用 Python IK，因此都需要 `tego` Conda 环境；选择 `cpp` 只省掉 Python bridge 专用的 `python-can` 和 Python SDK，C++ 包始终由 colcon 构建。
 
 | 包 / 目录 | 用途 |
 | --- | --- |
@@ -405,63 +367,6 @@ cd ~/tego
 | `tego_kinematics/arm_safety_monitor` | RViz 离线安全空间编辑器 |
 | `tego_description` | 示例 URDF、mesh 和 RViz 配置 |
 | `../tego_sdk` | 独立仓库，提供示教器 CAN 协议 |
-
-系统需要 ROS 2 Humble、colcon、SocketCAN、Eigen、Boost、KDL 和 NLopt。IK 与示例机械臂驱动还需要 Python 3.10、Pinocchio、CasADi、SciPy 和 `pyAgxArm`。
-
-```bash
-sudo apt update
-sudo apt install -y \
-  python3-colcon-common-extensions python3-colcon-recursive-crawl \
-  python3-rosdep python3-catkin-pkg python3-pip \
-  python3-numpy python3-scipy python3-tk python3-matplotlib \
-  can-utils ethtool iproute2 \
-  libboost-all-dev libeigen3-dev liborocos-kdl-dev \
-  libnlopt-dev libnlopt-cxx-dev
-
-CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
-source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda create -n tego python=3.10 -y
-conda activate tego
-conda install "pinocchio=3.2.0" "casadi=3.6.7" scipy \
-  typing_extensions exceptiongroup -y
-python -m pip install lark "numpy==2.0.2" "empy==3.3.4" \
-  pyyaml opencv-python ur-rtde netifaces meshcat
-python -m pip install git+https://github.com/agilexrobotics/pyAgxArm.git
-```
-
-两种 bridge 都使用 Python IK，因此都需要 `tego` 环境。IK 和驱动依赖安装在该 环境中，ROS 2 使用系统安装。确认 `python` 指向 `envs/tego/bin/python`：
-
-```bash
-python -c "import sys; print(sys.executable)"
-python -c "import pinocchio, casadi, scipy, pyAgxArm; print('IK and driver dependencies OK')"
-```
-
-构建两个仓库；显式指定的系统 Python 用于 ROS 构建工具和消息生成：
-
-```bash
-cd ~/tego
-source /opt/ros/humble/setup.bash
-rosdep update
-rosdep install --from-paths src/tego_control src/tego_sdk \
-  --ignore-src -r -y
-colcon build \
-  --base-paths src/tego_control src/tego_sdk \
-  --symlink-install \
-  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -DBUILD_TESTING=OFF
-source install/setup.bash
-```
-
-Python bridge 还需安装：
-
-```bash
-conda activate tego
-export PYTHONNOUSERSITE=1
-python -m pip install python-can
-python -m pip install -e ~/tego/src/tego_sdk/python
-python -c "import can, tego_sdk; print('Python bridge dependencies OK')"
-```
-
-Python bridge 同样需要构建 ROS 工作空间；C++ bridge 不需要 `python-can` 和 Python SDK。可用 `colcon list` 和 `ros2 pkg prefix tego_ros` 检查包是否被发现。
 
 </details>
 
@@ -508,12 +413,20 @@ ip -details link show type can
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
 bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
 
-# Piper 单臂，默认右侧通信链路
+# Nero 单臂（正装），默认右侧通信链路
+bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_python.sh
+
+# Piper 单臂（正装），默认右侧通信链路
+bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh
+bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_python.sh
+
+# 旧版单 Piper（使用旧 profile）
 bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
 bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
 
 # Left CAN pair / 左侧 CAN 接口
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh \
+SIDE=left bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh \
   arm_port:=left_arm port_name:=left_tego
 ```
 
