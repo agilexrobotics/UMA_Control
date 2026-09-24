@@ -1,10 +1,10 @@
-# tego_control
+# UMA_Control
 
 [English](#english) | [中文](#中文)
 
-`tego_control` integrates a six-axis teaching handle with ROS 2. It provides the ROS bridge, Nero/Piper examples, profile-driven Pinocchio IK, and safety constraints. Low-level CAN communication is provided by [`tego_sdk`](https://github.com/agilexrobotics/tego_sdk).
+`UMA_Control` integrates a six-axis teaching handle with ROS 2. It provides the ROS bridge, Nero/Piper examples, profile-driven Pinocchio IK, and safety constraints. Low-level CAN communication is provided by [`UMA_SDK`](https://github.com/agilexrobotics/UMA_SDK).
 
-`tego_control` 将六轴示教器接入 ROS 2，提供 ROS 桥接、Nero/Piper 遥操示例、基于 profile 配置的 Pinocchio 逆运动学和安全约束。底层 CAN 通信由 [`tego_sdk`](https://github.com/agilexrobotics/tego_sdk) 提供。
+`UMA_Control` 将六轴示教器接入 ROS 2，提供 ROS 桥接、Nero/Piper 遥操示例、基于 profile 配置的 Pinocchio 逆运动学和安全约束。底层 CAN 通信由 [`UMA_SDK`](https://github.com/agilexrobotics/UMA_SDK) 提供。
 
 <a id="english"></a>
 ## English
@@ -15,37 +15,37 @@
 Place the two independent repositories in one ROS 2 workspace:
 
 ```text
-~/tego/
+~/uma/
 └── src/
-    ├── tego_control/
-    └── tego_sdk/
+    ├── UMA_Control/
+    └── UMA_SDK/
 ```
 
 For a new workspace:
 
 ```bash
-mkdir -p ~/tego/src
-cd ~/tego/src
-git clone https://github.com/agilexrobotics/tego_control.git
-git clone https://github.com/agilexrobotics/tego_sdk.git
-cd ~/tego
-bash src/tego_control/build.sh
+mkdir -p ~/uma/src
+cd ~/uma/src
+git clone https://github.com/agilexrobotics/UMA_Control.git
+git clone https://github.com/agilexrobotics/UMA_SDK.git
+cd ~/uma
+bash src/UMA_Control/build.sh
 ```
 
 The script is interactive, with two modes: **full build** — dependencies, workspace and verification — and **rebuild**, which deletes `build/ install/ log/` first and then rebuilds and verifies. A full build also asks which bridge to deploy.
 
-Both bridge backends use Python IK, so both need the `tego` Conda environment.
+Both bridge backends use Python IK, so both need the `uma` Conda environment.
 Choosing `cpp` only drops `python-can` and the Python SDK, which the Python bridge alone uses; the C++ packages are always built by colcon.
 
 | Package / directory | Responsibility |
 | --- | --- |
-| `tego_bringup` | Demo launches, CAN scripts and robot profiles |
-| `tego_ros` | C++ / Python handle bridges |
-| `tego_msgs` | Handle messages and control service definitions |
-| `tego_kinematics/agx_arm_ctrl` | Profile loading, IK and AGX example drivers |
-| `tego_kinematics/arm_safety_monitor` | Offline RViz safety-space editor |
-| `tego_description` | Example URDFs, meshes and RViz configuration |
-| `../tego_sdk` | Independent repository for the handle CAN protocol |
+| `uma_bringup` | Demo launches, CAN scripts and robot profiles |
+| `uma_ros` | C++ / Python handle bridges |
+| `uma_msgs` | Handle messages and control service definitions |
+| `uma_kinematics/agx_arm_ctrl` | Profile loading, IK and AGX example drivers |
+| `uma_kinematics/arm_safety_monitor` | Offline RViz safety-space editor |
+| `uma_description` | Example URDFs, meshes and RViz configuration |
+| `../UMA_SDK` | Independent repository for the handle CAN protocol |
 
 </details>
 
@@ -55,19 +55,19 @@ Choosing `cpp` only drops `python-can` and the Python SDK, which the Python brid
 Run the following from the workspace root. Discover the USB-CAN adapters, update their `bus-info` values in `can_config.sh`, and activate the interfaces:
 
 ```bash
-bash src/tego_control/tego_bringup/scripts/find_all_can_port.sh
-bash src/tego_control/tego_bringup/scripts/can_config.sh
+bash src/UMA_Control/uma_bringup/scripts/find_all_can_port.sh
+bash src/UMA_Control/uma_bringup/scripts/can_config.sh
 ip -details link show type can
 ```
 
 | Interface | Device |
 | --- | --- |
-| `left_tego` / `right_tego` | Left / right teaching handle |
+| `left_uma` / `right_uma` | Left / right teaching handle |
 | `left_arm` / `right_arm` | Left / right example arm driver |
 
-A single-arm setup only needs one pair, such as `right_tego + right_arm`. Enable the matching lines in `can_config.sh` and comment out unused devices; the current script enables the right pair. Dual-arm operation needs all four. The USB addresses are machine-specific; keep the bitrate at 1 Mbps.
+A single-arm setup only needs one pair, such as `right_uma + right_arm`. The current `can_config.sh` enables all four interfaces; comment out unused devices for a single arm. The USB addresses are machine-specific; keep the bitrate at 1 Mbps.
 
-The optional `tego_bringup/udev/99-tego-can.rules` brings matching adapters up at 1 Mbps on insertion. It does not assign the logical names above; use `can_config.sh` for that.
+The optional `uma_bringup/udev/99-uma-can.rules` brings matching adapters up at 1 Mbps on insertion. It does not assign the logical names above; use `can_config.sh` for that.
 
 </details>
 
@@ -85,38 +85,30 @@ intended forward direction, then double-click. That horizontal direction maps to
 
 During a session the mapping stays fixed, even when you rotate the handle. Disable and re-enable to choose another forward direction; motion starts from the arm's current pose. Keep the handle base stable: this does not compensate for moving its base. Never reset the IMU during active teleoperation.
 
-All four `start_*.sh` scripts automatically activate the `tego` Conda environment. Set `CONDA_BASE` when Conda is not installed under `~/miniconda3`; no manual `conda activate` is required.
+All four `start_*.sh` scripts automatically activate the `uma` Conda environment. Set `CONDA_BASE` when Conda is not installed under `~/miniconda3`; no manual `conda activate` is required.
 
 ```bash
 # Nero dual arm
-bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
-
-# Nero single arm (horizontal mounting); the right route is the default
-bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_python.sh
+bash src/UMA_Control/uma_bringup/scripts/start_dual_nero_cpp.sh
+bash src/UMA_Control/uma_bringup/scripts/start_dual_nero_python.sh
 
 # Piper single arm (horizontal mounting); the right route is the default
-bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_python.sh
-
-# Legacy single Piper (uses old profile)
-bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
+bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh
+bash src/UMA_Control/uma_bringup/scripts/start_single_piper_python.sh
 
 # Left CAN pair / 左侧 CAN 接口
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh \
-  arm_port:=left_arm port_name:=left_tego
+SIDE=left bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh \
+  arm_port:=left_arm port_name:=left_uma
 ```
 
-`SIDE` selects the single-arm ROS route. With left-side CAN names, also pass `arm_port:=left_arm port_name:=left_tego`; changing `SIDE` alone keeps the demo's right-side port defaults. Choose one bridge backend per interface.
+`SIDE` selects the single-arm ROS route. With left-side CAN names, also pass `arm_port:=left_arm port_name:=left_uma`; changing `SIDE` alone keeps the demo's right-side port defaults. Choose one bridge backend per interface.
 
 | Script setting | Default / use |
 | --- | --- |
 | `CONDA_BASE` | `~/miniconda3`; override for another Conda installation |
 | `WORKSPACE_DIR` | Auto-detected directory containing `install/setup.bash` |
 | `SIDE` | Piper only: `right` or `left` |
-| `LAUNCH_FILE` | Model's demo launch in `tego_bringup` |
+| `LAUNCH_FILE` | Model's demo launch in `uma_bringup` |
 | Trailing `key:=value` | Forwarded to `ros2 launch` |
 
 For example, add `profile_path:=/absolute/path/my_profile.yaml` to a start command. Scripts load Conda, ROS and the workspace, and clean up matching stack processes on startup and exit, including Ctrl+C. This cleanup can also stop separately launched instances with matching process names; use direct launches for parallel debugging.
@@ -124,10 +116,10 @@ For example, add `profile_path:=/absolute/path/my_profile.yaml` to a start comma
 For direct `ros2 launch`, prepare each terminal first:
 
 ```bash
-cd ~/tego
+cd ~/uma
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate tego
+conda activate uma
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export PYTHONNOUSERSITE=1
@@ -136,11 +128,11 @@ export PYTHONNOUSERSITE=1
 Then choose one entry point:
 
 ```bash
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=cpp
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
-ros2 launch tego_bringup demo_piper.launch.py
-ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python \
-  arm_port:=left_arm port_name:=left_tego
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=cpp
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch uma_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py side:=left backend:=python \
+  arm_port:=left_arm port_name:=left_uma
 ```
 
 Set `start_arm:=false` when using an external arm driver. This only disables the repository's example driver.
@@ -152,7 +144,7 @@ Double-click the inner side key to toggle teleoperation. Long-press it while tel
 <details>
 <summary><strong>Profiles and installation geometry</strong></summary>
 
-Example profiles are stored in `tego_bringup/config/`:
+Example profiles are stored in `uma_bringup/config/`:
 
 | Profile | Default use |
 | --- | --- |
@@ -204,11 +196,11 @@ Main data path:
 
 ```text
 Teaching-handle CAN
-  -> tego_ros
+  -> uma_ros
   -> /left_handle_pose or /right_handle_pose
   -> Pinocchio IK
   -> /control/joint_states_{left,right}_raw
-  -> tego_ros, while teleoperation is enabled
+  -> uma_ros, while teleoperation is enabled
   -> /control/move_js_{left,right}
   -> arm driver
 ```
@@ -238,9 +230,9 @@ Demo launch arguments:
 | `gripper_width_min/max` | `0.00/0.07` | Gripper range in metres |
 | `pub_rate` | `200.0` | Bridge publication rate in Hz |
 | `log_level` | `info` | Bridge and example-driver logging |
-| `arm_port`, `port_name` | `right_arm`, `right_tego` | Piper arm and handle CAN ports |
+| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper arm and handle CAN ports |
 | `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero arm CAN ports |
-| `left_port_name`, `right_port_name` | `left_tego`, `right_tego` | Nero handle CAN ports |
+| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero handle CAN ports |
 
 </details>
 
@@ -252,25 +244,25 @@ Demo launch arguments:
 | --- | --- | --- |
 | `/joint` | `sensor_msgs/msg/JointState` | Handle joints, not arm feedback |
 | `/imu` | `sensor_msgs/msg/Imu` | Orientation, angular velocity, acceleration |
-| `/handle_state` | `tego_msgs/msg/HandleState` | `joystick_x/y`, `trigger_press_percentage`, key events and receive counts |
-| `/mt_sensor_status` | `tego_msgs/msg/MtSensorStatus` | `name`, `data`, `receive_count`; each sensor has `angle_deg/rad`, `voltage_x/y` |
+| `/handle_state` | `uma_msgs/msg/HandleState` | `joystick_x/y`, `trigger_press_percentage`, key events and receive counts |
+| `/mt_sensor_status` | `uma_msgs/msg/MtSensorStatus` | `name`, `data`, `receive_count`; each sensor has `angle_deg/rad`, `voltage_x/y` |
 
-Prefix these with `/tego_l` or `/tego_r`, for example `/tego_r/handle_state`. A connected CAN socket alone does not prove data is arriving; inspect receive counts and topic rates.
+Prefix these with `/uma_l` or `/uma_r`, for example `/uma_r/handle_state`. A connected CAN socket alone does not prove data is arriving; inspect receive counts and topic rates.
 
 | Service suffix | Type | Action |
 | --- | --- | --- |
 | `/reset_pose` | `std_srvs/srv/Empty` | Recapture the handle pose reference |
-| `/reset_control` | `tego_msgs/srv/ResetControl` | Encoder reset: `reset_mode` 0 = zero, 1 = factory |
+| `/reset_control` | `uma_msgs/srv/ResetControl` | Encoder reset: `reset_mode` 0 = zero, 1 = factory |
 | `/enable_handle_motor` | `std_srvs/srv/SetBool` | Start / stop handle motor |
 | `/enable_reverse` | `std_srvs/srv/SetBool` | Change handle base reversal |
 
-These services also use `/tego_l` or `/tego_r`. They are distinct from the IK services `/left_teleop_trigger` and `/right_teleop_trigger`, which **toggle** the state on each call. Reset and homing are different operations.
+These services also use `/uma_l` or `/uma_r`. They are distinct from the IK services `/left_teleop_trigger` and `/right_teleop_trigger`, which **toggle** the state on each call. Reset and homing are different operations.
 
-Read-only checks for the right route (replace `right` / `tego_r` for the left):
+Read-only checks for the right route (replace `right` / `uma_r` for the left):
 
 ```bash
 ros2 topic hz /right_handle_pose
-ros2 topic echo /tego_r/handle_state --once
+ros2 topic echo /uma_r/handle_state --once
 ros2 topic echo /feedback/joint_states_right --once
 ros2 topic echo /right_teleop_enable --once
 ros2 topic echo /control/joint_states_right_raw --once
@@ -302,7 +294,7 @@ The launch starts RViz, `robot_state_publisher`, `joint_state_publisher_gui` and
 5. Move a Plane and adjust its green normal arrow. The wall menu can flip the normal. Check `keep_side` and the protected frames in the profile.
 6. Choose **Save profile**, then restart the teleoperation node to apply it.
 
-Saving atomically updates the `safety` block and preserves other blocks and their comments. Source profiles are preferred; installed package data is the fallback. Use `TEGO_PROFILE_DIR` to choose a writable directory. The Box menu step is controlled by `box_resize_step` (0.05 m); `plane_size` (0.8 m) changes only the displayed wall size. The constraint is an infinite plane.
+Saving atomically updates the `safety` block and preserves other blocks and their comments. Source profiles are preferred; installed package data is the fallback. Use `UMA_PROFILE_DIR` to choose a writable directory. The Box menu step is controlled by `box_resize_step` (0.05 m); `plane_size` (0.8 m) changes only the displayed wall size. The constraint is an infinite plane.
 
 Constraints apply to the origins of `protected_frames`, not every robot link. If the profile uses `tool0` instead of a generated `ee` frame, also update the editor's new-object default `protected_frames: [ee]` before using that profile.
 
@@ -324,7 +316,7 @@ Before connecting motion output, inspect the IK target in the visualization. The
 
 For `Infeasible_Problem_Detected`, first confirm the loaded profile and URDF frames. Then check joint limits, the Box bounds/margin, wall normal/keep side and protected points; inspect `wall_dist` in the logs. Reduce handle scaling and restart from a reachable pose. `collision_pairs` checks self-collision after solving; it is not an Opti hard constraint.
 
-For import failures, inspect `which python3` and rerun the dependency checks in the `tego` environment. Rebuild and source `install/setup.bash` if ROS packages or updated launch files are missing. Use hardware speed limits and the arm's own stop mechanism during commissioning.
+For import failures, inspect `which python3` and rerun the dependency checks in the `uma` environment. Rebuild and source `install/setup.bash` if ROS packages or updated launch files are missing. Use hardware speed limits and the arm's own stop mechanism during commissioning.
 
 </details>
 
@@ -334,39 +326,39 @@ For import failures, inspect `which python3` and rerun the dependency checks in 
 <details>
 <summary><strong>工作空间、依赖与构建</strong></summary>
 
-`tego_control` 和 `tego_sdk` 是两个独立 Git 仓库，放在同一个 ROS 2 工作空间：
+`UMA_Control` 和 `UMA_SDK` 是两个独立 Git 仓库，放在同一个 ROS 2 工作空间：
 
 ```text
-~/tego/
+~/uma/
 └── src/
-    ├── tego_control/
-    └── tego_sdk/
+    ├── UMA_Control/
+    └── UMA_SDK/
 ```
 
 首次创建工作空间：
 
 ```bash
-mkdir -p ~/tego/src
-cd ~/tego/src
-git clone https://github.com/agilexrobotics/tego_control.git
-git clone https://github.com/agilexrobotics/tego_sdk.git
-cd ~/tego
-bash src/tego_control/build.sh
+mkdir -p ~/uma/src
+cd ~/uma/src
+git clone https://github.com/agilexrobotics/UMA_Control.git
+git clone https://github.com/agilexrobotics/UMA_SDK.git
+cd ~/uma
+bash src/UMA_Control/build.sh
 ```
 
 脚本是交互式的，只有两种模式：**完整构建**（依赖 + 工作区 + 校验）和**重新构建**（先删除 `build/ install/ log/`，再重新构建并校验）。完整构建还会询问部署哪个 bridge。
 
-两种 bridge 都使用 Python IK，因此都需要 `tego` Conda 环境；选择 `cpp` 只省掉 Python bridge 专用的 `python-can` 和 Python SDK，C++ 包始终由 colcon 构建。
+两种 bridge 都使用 Python IK，因此都需要 `uma` Conda 环境；选择 `cpp` 只省掉 Python bridge 专用的 `python-can` 和 Python SDK，C++ 包始终由 colcon 构建。
 
 | 包 / 目录 | 用途 |
 | --- | --- |
-| `tego_bringup` | 示例 launch、CAN 脚本和机械臂 profile |
-| `tego_ros` | C++ / Python 示教器 bridge |
-| `tego_msgs` | 手柄消息和控制服务定义 |
-| `tego_kinematics/agx_arm_ctrl` | Profile 加载、IK 和 AGX 示例驱动 |
-| `tego_kinematics/arm_safety_monitor` | RViz 离线安全空间编辑器 |
-| `tego_description` | 示例 URDF、mesh 和 RViz 配置 |
-| `../tego_sdk` | 独立仓库，提供示教器 CAN 协议 |
+| `uma_bringup` | 示例 launch、CAN 脚本和机械臂 profile |
+| `uma_ros` | C++ / Python 示教器 bridge |
+| `uma_msgs` | 手柄消息和控制服务定义 |
+| `uma_kinematics/agx_arm_ctrl` | Profile 加载、IK 和 AGX 示例驱动 |
+| `uma_kinematics/arm_safety_monitor` | RViz 离线安全空间编辑器 |
+| `uma_description` | 示例 URDF、mesh 和 RViz 配置 |
+| `../UMA_SDK` | 独立仓库，提供示教器 CAN 协议 |
 
 </details>
 
@@ -376,19 +368,20 @@ bash src/tego_control/build.sh
 在工作空间根目录查找 USB-CAN，更新 `can_config.sh` 中的 `bus-info`，再启动接口：
 
 ```bash
-bash src/tego_control/tego_bringup/scripts/find_all_can_port.sh
-bash src/tego_control/tego_bringup/scripts/can_config.sh
+bash src/UMA_Control/uma_bringup/scripts/find_all_can_port.sh
+bash src/UMA_Control/uma_bringup/scripts/can_config.sh
 ip -details link show type can
 ```
 
+> [!TIP]
+> 为了规范端口顺序，请重复执行单个遥操设备的USB-CAN的接入、查找与记录的方法，而不是一次性把所有遥操设备都接入后再查找 USB-CAN。
+
 | 接口名 | 设备 |
 | --- | --- |
-| `left_tego` / `right_tego` | 左 / 右示教器 |
+| `left_uma` / `right_uma` | 左 / 右示教器 |
 | `left_arm` / `right_arm` | 左 / 右示例机械臂驱动 |
 
-单臂只需一对接口，例如 `right_tego + right_arm`。在 `can_config.sh` 中启用对应 行，注释未连接的设备；当前脚本启用右侧一对，双臂需要启用四路。USB 地址按本机 修改，bitrate 保持 1 Mbps。
-
-可选的 `tego_bringup/udev/99-tego-can.rules` 会在插入匹配设备时以 1 Mbps 启动 接口。它不分配上述逻辑名称，命名仍由 `can_config.sh` 完成。
+可选的 `uma_bringup/udev/99-uma-can.rules` 会在插入匹配设备时以 1 Mbps 启动 接口。它不分配上述逻辑名称，命名仍由 `can_config.sh` 完成。
 
 </details>
 
@@ -398,7 +391,7 @@ ip -details link show type can
 **安装与上电准备：**
 
 1. 正装设置 `installation_pos: horizontal`；`side` 选择 CAN 路由，例如
-`right_arm` 和 `right_tego`。操作方向以 `base_link` 的 +X 为前、+Z 为上。
+`right_arm` 和 `right_uma`。操作方向以 `base_link` 的 +X 为前、+Z 为上。
 2. 启动 bridge 和重置 IMU 前，将手柄按规定零位放平。桥接以此建立姿态参考，
 不会自动找平或识别重力方向。
 3. **每次开启前，将手柄放平并指向目标前方，再双击开启。**该水平朝向映射为
@@ -406,49 +399,29 @@ ip -details link show type can
 
 会话中映射固定，转动手柄不会改变平移方向。换朝向时关闭后重新开启，从机械臂当前位姿继续。保持示教器底座稳定；本功能不补偿底座移动，遥操中不要重置 IMU。
 
-四个 `start_*.sh` 会自动激活 `tego` Conda 环境，无需手动执行 `conda activate`。如果 Conda 不在 `~/miniconda3`，启动时设置 `CONDA_BASE`。
+四个 `start_*.sh` 会自动激活 `uma` Conda 环境，无需手动执行 `conda activate`。如果 Conda 不在 `~/miniconda3`，启动时设置 `CONDA_BASE`。
 
 ```bash
 # Nero 双臂
-bash src/tego_control/tego_bringup/scripts/start_dual_nero_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_dual_nero_python.sh
+bash src/UMA_Control/uma_bringup/scripts/start_dual_nero_cpp.sh
+bash src/UMA_Control/uma_bringup/scripts/start_dual_nero_python.sh
 
-# Nero 单臂（正装），默认右侧通信链路
-bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_horizontal_nero_python.sh
-
-# Piper 单臂（正装），默认右侧通信链路
-bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_python.sh
-
-# 旧版单 Piper（使用旧 profile）
-bash src/tego_control/tego_bringup/scripts/start_single_piper_cpp.sh
-bash src/tego_control/tego_bringup/scripts/start_single_piper_python.sh
+# Piper 单臂
+bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh
+bash src/UMA_Control/uma_bringup/scripts/start_single_piper_python.sh
 
 # Left CAN pair / 左侧 CAN 接口
-SIDE=left bash src/tego_control/tego_bringup/scripts/start_horizontal_piper_cpp.sh \
-  arm_port:=left_arm port_name:=left_tego
+SIDE=left bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh \
+  arm_port:=left_arm port_name:=left_uma
 ```
-
-`SIDE` 选择单臂 ROS 路由。使用左侧 CAN 名称时还需传入 `arm_port:=left_arm port_name:=left_tego`，只改 `SIDE` 会保留 demo 的右侧端口 默认值。同一接口选择一种 bridge 即可。
-
-| 脚本设置 | 默认值 / 用途 |
-| --- | --- |
-| `CONDA_BASE` | `~/miniconda3`；可指定其他 Conda 安装目录 |
-| `WORKSPACE_DIR` | 自动查找含 `install/setup.bash` 的工作空间 |
-| `SIDE` | 仅 Piper：`right` 或 `left` |
-| `LAUNCH_FILE` | `tego_bringup` 中对应机型的 demo launch |
-| 末尾的 `key:=value` | 透传给 `ros2 launch` |
-
-例如在启动命令末尾添加 `profile_path:=/绝对路径/my_profile.yaml`。脚本会加载 Conda、ROS 和工作空间，并在启动前及退出时清理匹配的进程，支持 Ctrl+C 退出。清理也可能结束单独启动的同名实例；并行调试时使用下面的直接 launch。
 
 手动执行 `ros2 launch` 前，每个终端先加载环境：
 
 ```bash
-cd ~/tego
+cd ~/uma
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate tego
+conda activate uma
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export PYTHONNOUSERSITE=1
@@ -457,11 +430,11 @@ export PYTHONNOUSERSITE=1
 再选择一个入口：
 
 ```bash
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=cpp
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
-ros2 launch tego_bringup demo_piper.launch.py
-ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python \
-  arm_port:=left_arm port_name:=left_tego
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=cpp
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch uma_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py side:=left backend:=python \
+  arm_port:=left_arm port_name:=left_uma
 ```
 
 使用自有机械臂驱动时传入 `start_arm:=false`，该参数只关闭仓库示例驱动。
@@ -473,7 +446,7 @@ ros2 launch tego_bringup demo_piper.launch.py side:=left backend:=python \
 <details>
 <summary><strong>Profile 和安装方向</strong></summary>
 
-示例 profile 位于 `tego_bringup/config/`：
+示例 profile 位于 `uma_bringup/config/`：
 
 | Profile | 默认用途 |
 | --- | --- |
@@ -527,11 +500,11 @@ Piper 同时收到 `installation_pos`，用于控制器重力补偿。
 
 ```text
 示教器 CAN
-  -> tego_ros
+  -> uma_ros
   -> /left_handle_pose 或 /right_handle_pose
   -> Pinocchio IK
   -> /control/joint_states_{left,right}_raw
-  -> tego_ros（仅在遥操开启时转发）
+  -> uma_ros（仅在遥操开启时转发）
   -> /control/move_js_{left,right}
   -> 机械臂驱动
 ```
@@ -561,9 +534,9 @@ Demo launch 参数：
 | `gripper_width_min/max` | `0.00/0.07` | 夹爪范围，单位 m |
 | `pub_rate` | `200.0` | bridge 发布频率，单位 Hz |
 | `log_level` | `info` | bridge 和示例驱动的日志级别 |
-| `arm_port`, `port_name` | `right_arm`, `right_tego` | Piper 机械臂、示教器 CAN 端口 |
+| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper 机械臂、示教器 CAN 端口 |
 | `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero 机械臂 CAN 端口 |
-| `left_port_name`, `right_port_name` | `left_tego`, `right_tego` | Nero 示教器 CAN 端口 |
+| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero 示教器 CAN 端口 |
 
 </details>
 
@@ -575,25 +548,25 @@ Demo launch 参数：
 | --- | --- | --- |
 | `/joint` | `sensor_msgs/msg/JointState` | 示教器关节，不是机械臂反馈 |
 | `/imu` | `sensor_msgs/msg/Imu` | 姿态、角速度、加速度 |
-| `/handle_state` | `tego_msgs/msg/HandleState` | `joystick_x/y`、`trigger_press_percentage`、按键事件和接收计数 |
-| `/mt_sensor_status` | `tego_msgs/msg/MtSensorStatus` | `name`、`data`、`receive_count`；每个传感器含 `angle_deg/rad`、`voltage_x/y` |
+| `/handle_state` | `uma_msgs/msg/HandleState` | `joystick_x/y`、`trigger_press_percentage`、按键事件和接收计数 |
+| `/mt_sensor_status` | `uma_msgs/msg/MtSensorStatus` | `name`、`data`、`receive_count`；每个传感器含 `angle_deg/rad`、`voltage_x/y` |
 
-以上加 `/tego_l` 或 `/tego_r` 前缀，例如 `/tego_r/handle_state`。CAN socket 连接成功不代表收到数据，可结合接收计数和 topic 频率确认。
+以上加 `/uma_l` 或 `/uma_r` 前缀，例如 `/uma_r/handle_state`。CAN socket 连接成功不代表收到数据，可结合接收计数和 topic 频率确认。
 
 | 服务后缀 | 类型 | 动作 |
 | --- | --- | --- |
 | `/reset_pose` | `std_srvs/srv/Empty` | 重新采集示教器位姿参考 |
-| `/reset_control` | `tego_msgs/srv/ResetControl` | 编码器复位，`reset_mode` 0 = 零位，1 = 出厂 |
+| `/reset_control` | `uma_msgs/srv/ResetControl` | 编码器复位，`reset_mode` 0 = 零位，1 = 出厂 |
 | `/enable_handle_motor` | `std_srvs/srv/SetBool` | 启停手柄电机 |
 | `/enable_reverse` | `std_srvs/srv/SetBool` | 切换手柄基座反向 |
 
-服务同样加 `/tego_l` 或 `/tego_r` 前缀。IK 的 `/left_teleop_trigger` 和 `/right_teleop_trigger` 则每次调用都会**切换**遥操状态。复位服务与机械臂回零 是不同操作。
+服务同样加 `/uma_l` 或 `/uma_r` 前缀。IK 的 `/left_teleop_trigger` 和 `/right_teleop_trigger` 则每次调用都会**切换**遥操状态。复位服务与机械臂回零 是不同操作。
 
-右侧链路的只读检查命令；左侧替换 `right` 和 `tego_r`：
+右侧链路的只读检查命令；左侧替换 `right` 和 `uma_r`：
 
 ```bash
 ros2 topic hz /right_handle_pose
-ros2 topic echo /tego_r/handle_state --once
+ros2 topic echo /uma_r/handle_state --once
 ros2 topic echo /feedback/joint_states_right --once
 ros2 topic echo /right_teleop_enable --once
 ros2 topic echo /control/joint_states_right_raw --once
@@ -625,7 +598,7 @@ Launch 会启动 RViz、`robot_state_publisher`、`joint_state_publisher_gui` �
 5. 移动 Plane，调整绿色法向箭头；菜单可翻转法向。结合 profile 检查 `keep_side` 和 `protected_frames`。
 6. 选择**保存 profile**，重启遥操节点使约束生效。
 
-保存时原子更新 `safety` 块，保留其他区块及其注释。优先写源码 profile，找不到 时回退到安装目录；可用 `TEGO_PROFILE_DIR` 指定可写目录。`box_resize_step` 控制 Box 菜单的调整步长，默认 0.05 m；`plane_size` 默认 0.8 m，只影响墙面显示 尺寸，实际约束是无限平面。
+保存时原子更新 `safety` 块，保留其他区块及其注释。优先写源码 profile，找不到 时回退到安装目录；可用 `UMA_PROFILE_DIR` 指定可写目录。`box_resize_step` 控制 Box 菜单的调整步长，默认 0.05 m；`plane_size` 默认 0.8 m，只影响墙面显示 尺寸，实际约束是无限平面。
 
 约束只保护 `protected_frames` 的原点，不会自动覆盖所有连杆。若 profile 使用 `tool0` 而没有生成 `ee`，编辑器新建对象后还需把默认的 `protected_frames: [ee]` 改为实际 frame。
 

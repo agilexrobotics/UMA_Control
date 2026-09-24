@@ -2,18 +2,21 @@
 
 [English](#english) | [中文](#中文)
 
-Connect a new arm to `tego_control` with a driver, URDF/profile and a launch that includes the handle bridge. Nero/Piper examples provide reference integrations; other brands use the same ROS 2 interfaces. See [README](README.md) for environment setup, CAN configuration and handle operation.
+Connect a new arm to `UMA_Control` with a driver, URDF/profile and a launch that includes the handle bridge. Nero/Piper examples provide reference integrations; other brands use the same ROS 2 interfaces. See [README](README.md) for environment setup, CAN configuration and handle operation.
 
-将新机械臂接入 `tego_control`，需要准备驱动、URDF/profile 和包含示教器 bridge 的 启动入口。本仓库提供 Nero/Piper 示例；其他品牌通过相同的 ROS 2 接口接入。环境安装、CAN 配置和手柄操作见 [README](README.md)。
+将新机械臂接入 `UMA_Control`，需要准备驱动、URDF/profile 和包含示教器 bridge 的 启动入口。本仓库提供 Nero/Piper 示例；其他品牌通过相同的 ROS 2 接口接入。环境安装、CAN 配置和手柄操作见 [README](README.md)。
 
 <a id="english"></a>
 ## English
+
+> [!WARNING]
+> This guide and its example profiles are for integration reference only; they do not certify a new arm or configuration as safe for hardware operation. Incorrect joint mapping, limits, units, mounting, communication or control settings can cause unexpected motion, collision, injury or equipment damage. Before commanding a real arm, verify the model and feedback against the hardware, provide a working emergency stop, and test small movements at low speed in a clear workspace. You are responsible for validating the complete system for your robot and application.
 
 <details>
 <summary><strong>1. Control flow and responsibilities</strong></summary>
 
 ```text
-Handle CAN → tego_ros bridge → /{side}_handle_pose → Pinocchio IK
+Handle CAN → uma_ros bridge → /{side}_handle_pose → Pinocchio IK
                                                         ↓
 Your arm driver ← /control/move_js_{side} ← bridge ← /control/joint_states_{side}_raw
       ↓                                   ↑
@@ -287,7 +290,7 @@ Each box `min` must be below `max`, with reachable space after accounting for `m
 Edit a custom profile offline:
 
 ```bash
-TEGO_PROFILE_DIR=/absolute/path/to/config \
+UMA_PROFILE_DIR=/absolute/path/to/config \
   ros2 launch arm_safety_monitor safety_monitor.launch.py \
   profile_name:=my_robot_profile.yaml
 ```
@@ -327,7 +330,7 @@ def build(context):
     profile = load_profile(path, validate_robot=False)
     bridge_args = {
         "port_name": LaunchConfiguration("port_name"),
-        "node_name": f"tego_{side[0]}",
+        "node_name": f"uma_{side[0]}",
         "pika_pose_topic": f"/{side}_handle_pose",
         "remote_joint_topic_in": f"/control/joint_states_{side}_raw",
         "remote_joint_topic_out": f"/control/move_js_{side}",
@@ -358,7 +361,7 @@ def build(context):
             "node_name": f"teleop_{side}_arm_node",
             "profile_path": path,
         }),
-        include_launch("tego_bringup", "run_single_node.launch.py", bridge_args),
+        include_launch("uma_bringup", "run_single_node.launch.py", bridge_args),
     ]
 
 
@@ -366,7 +369,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("profile_path"),
         DeclareLaunchArgument("side", default_value="left", choices=["left", "right"]),
-        DeclareLaunchArgument("port_name", default_value="left_tego"),
+        DeclareLaunchArgument("port_name", default_value="left_uma"),
         OpaqueFunction(function=build),
     ])
 ```
@@ -376,10 +379,10 @@ The template assumes your driver launch accepts `side` and `installation_pos` an
 ```bash
 ros2 launch my_robot_bringup teleop.launch.py \
   profile_path:=/absolute/path/my_robot_profile.yaml \
-  side:=left port_name:=left_tego
+  side:=left port_name:=left_uma
 ```
 
-For the right route, use `side:=right port_name:=right_tego`. Launch one instance per route for dual arms, with unique node names and driver interfaces. Do not start both the high-level demo's example driver and your own driver.
+For the right route, use `side:=right port_name:=right_uma`. Launch one instance per route for dual arms, with unique node names and driver interfaces. Do not start both the high-level demo's example driver and your own driver.
 
 </details>
 
@@ -396,7 +399,7 @@ IK outputs only URDF arm joints `q`. The current bridge retains some model conve
 
 Six-axis IK does not append gripper channels. With `effector_type: agx_gripper`, the Piper/Nero bridge publishes gripper commands separately. Other drivers must implement the corresponding subscription. Set width limits in metres, with minimum no greater than maximum, within the hardware stroke.
 
-Piper/Nero wrappers contain their handle geometry, modes and home selection. Check [bridge_launch.py](tego_bringup/tego_bringup/bridge_launch.py) and bridge output handling before reuse. Common installation settings do not imply common end-effector protocols.
+Piper/Nero wrappers contain their handle geometry, modes and home selection. Check [bridge_launch.py](uma_bringup/uma_bringup/bridge_launch.py) and bridge output handling before reuse. Common installation settings do not imply common end-effector protocols.
 
 </details>
 
@@ -405,7 +408,7 @@ Piper/Nero wrappers contain their handle geometry, modes and home selection. Che
 
 Validate the model, inspect data, then test slow hardware motion. Commands below use the left route.
 
-**Load the model:** substitute your profile path and run in the prepared `tego` environment:
+**Load the model:** substitute your profile path and run in the prepared `uma` environment:
 
 ```bash
 python - <<'PY'
@@ -463,19 +466,19 @@ These demos start the example driver, IK and bridge by default. Choose one:
 
 ```bash
 # Piper: right route; upright mounting set in piper_profile.yaml
-ros2 launch tego_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py
 
 # Piper: left route with explicit left CAN ports
-ros2 launch tego_bringup demo_piper.launch.py \
-  side:=left arm_port:=left_arm port_name:=left_tego backend:=python
+ros2 launch uma_bringup demo_piper.launch.py \
+  side:=left arm_port:=left_arm port_name:=left_uma backend:=python
 
 # Nero: dual arm
-ros2 launch tego_bringup demo_nero_bringup.launch.py
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch uma_bringup demo_nero_bringup.launch.py
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
 
 # Compatible driver already running: start only Piper IK and bridge
-ros2 launch tego_bringup demo_piper.launch.py start_arm:=false \
-  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml
+ros2 launch uma_bringup demo_piper.launch.py start_arm:=false \
+  profile_path:=$PWD/src/UMA_Control/uma_bringup/config/piper_profile.yaml
 ```
 
 `start_arm:=false` does not configure interfaces for your driver; it must still satisfy section 2. Starting only the driver and IK omits handle poses, button handling and final command forwarding supplied by the bridge.
@@ -485,11 +488,14 @@ ros2 launch tego_bringup demo_piper.launch.py start_arm:=false \
 <a id="中文"></a>
 ## 中文
 
+> [!WARNING]
+> 本指南及示例 profile 仅供适配参考，不表示新机械臂或配置已通过真机安全验证。关节映射、限位、单位、安装方向、通信或控制参数错误，可能导致意外运动、碰撞、人身伤害或设备损坏。向真机发送运动指令前，请对照硬件核实模型与反馈，确保急停可用，并在空旷环境中以低速、小幅度测试。适配者须自行验证具体机械臂及应用的完整系统。
+
 <details>
 <summary><strong>1. 接入链路与职责</strong></summary>
 
 ```text
-示教器 CAN → tego_ros bridge → /{side}_handle_pose → Pinocchio IK
+示教器 CAN → uma_ros bridge → /{side}_handle_pose → Pinocchio IK
                                                         ↓
 用户机械臂驱动 ← /control/move_js_{side} ← bridge ← /control/joint_states_{side}_raw
       ↓                                   ↑
@@ -764,7 +770,7 @@ Box 的每轴 `min` 必须小于 `max`，并留出 `margin` 后仍有可达空�
 离线编辑自定义 profile：
 
 ```bash
-TEGO_PROFILE_DIR=/absolute/path/to/config \
+UMA_PROFILE_DIR=/absolute/path/to/config \
   ros2 launch arm_safety_monitor safety_monitor.launch.py \
   profile_name:=my_robot_profile.yaml
 ```
@@ -804,7 +810,7 @@ def build(context):
     profile = load_profile(path, validate_robot=False)
     bridge_args = {
         "port_name": LaunchConfiguration("port_name"),
-        "node_name": f"tego_{side[0]}",
+        "node_name": f"uma_{side[0]}",
         "pika_pose_topic": f"/{side}_handle_pose",
         "remote_joint_topic_in": f"/control/joint_states_{side}_raw",
         "remote_joint_topic_out": f"/control/move_js_{side}",
@@ -835,7 +841,7 @@ def build(context):
             "node_name": f"teleop_{side}_arm_node",
             "profile_path": path,
         }),
-        include_launch("tego_bringup", "run_single_node.launch.py", bridge_args),
+        include_launch("uma_bringup", "run_single_node.launch.py", bridge_args),
     ]
 
 
@@ -843,7 +849,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("profile_path"),
         DeclareLaunchArgument("side", default_value="left", choices=["left", "right"]),
-        DeclareLaunchArgument("port_name", default_value="left_tego"),
+        DeclareLaunchArgument("port_name", default_value="left_uma"),
         OpaqueFunction(function=build),
     ])
 ```
@@ -853,10 +859,10 @@ def generate_launch_description():
 ```bash
 ros2 launch my_robot_bringup teleop.launch.py \
   profile_path:=/absolute/path/my_robot_profile.yaml \
-  side:=left port_name:=left_tego
+  side:=left port_name:=left_uma
 ```
 
-使用右路时同时改为 `side:=right port_name:=right_tego`。双臂启动两份对应路由，节点名和驱动接口必须唯一。不要同时启动高层 demo 中的示例驱动和自己的驱动。
+使用右路时同时改为 `side:=right port_name:=right_uma`。双臂启动两份对应路由，节点名和驱动接口必须唯一。不要同时启动高层 demo 中的示例驱动和自己的驱动。
 
 </details>
 
@@ -873,7 +879,7 @@ IK 只输出 URDF 臂关节 `q`。现有 bridge 仍有机型相关约定，七�
 
 六轴 IK 输出本身不追加夹爪通道。Piper/Nero 示例在 `effector_type: agx_gripper` 时由 bridge 单独发布夹爪命令；其他驱动需要实现对应订阅。设置开合范围时使用 m，确保最小值不大于最大值，并符合硬件行程。
 
-Piper/Nero wrapper 已包含各自的手柄几何、模式和回零取值方式。复用前检查 [bridge_launch.py](tego_bringup/tego_bringup/bridge_launch.py) 与 bridge 输出逻辑；安装方向通用，不代表所有机型的末端执行器协议相同。
+Piper/Nero wrapper 已包含各自的手柄几何、模式和回零取值方式。复用前检查 [bridge_launch.py](uma_bringup/uma_bringup/bridge_launch.py) 与 bridge 输出逻辑；安装方向通用，不代表所有机型的末端执行器协议相同。
 
 </details>
 
@@ -882,7 +888,7 @@ Piper/Nero wrapper 已包含各自的手柄几何、模式和回零取值方式�
 
 先校验模型，再检查数据，最后接入低速运动。以下命令均以左路为例。
 
-**模型加载：** 将代码中的 profile 路径替换为实际路径，在已加载的 `tego` 环境运行：
+**模型加载：** 将代码中的 profile 路径替换为实际路径，在已加载的 `uma` 环境运行：
 
 ```bash
 python - <<'PY'
@@ -937,19 +943,19 @@ ros2 topic echo /control/move_js_left --once
 
 ```bash
 # Piper：右路，正装由 piper_profile.yaml 指定
-ros2 launch tego_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py
 
 # Piper：左路，显式选择左侧 CAN 端口
-ros2 launch tego_bringup demo_piper.launch.py \
-  side:=left arm_port:=left_arm port_name:=left_tego backend:=python
+ros2 launch uma_bringup demo_piper.launch.py \
+  side:=left arm_port:=left_arm port_name:=left_uma backend:=python
 
 # Nero：双臂
-ros2 launch tego_bringup demo_nero_bringup.launch.py
-ros2 launch tego_bringup demo_nero_bringup.launch.py backend:=python
+ros2 launch uma_bringup demo_nero_bringup.launch.py
+ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
 
 # 已单独启动兼容驱动，只启动 Piper IK 和 bridge
-ros2 launch tego_bringup demo_piper.launch.py start_arm:=false \
-  profile_path:=$PWD/src/tego_control/tego_bringup/config/piper_profile.yaml
+ros2 launch uma_bringup demo_piper.launch.py start_arm:=false \
+  profile_path:=$PWD/src/UMA_Control/uma_bringup/config/piper_profile.yaml
 ```
 
 `start_arm:=false` 不会替自有驱动配置接口；仍需满足第 2 节约定。只启动驱动与 IK 而遗漏 bridge，会缺少示教器位姿、按键处理和最终命令转发。

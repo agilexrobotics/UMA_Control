@@ -1,32 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# tego_control / tego_sdk 一键构建脚本  ·  one-command build script
-#
-# 直接运行即可, 不需要任何命令行参数 —— 做什么、部署哪个 backend 都在终端里选:
-# Just run it; there are no command-line arguments — you choose what to do and
-# which backend to deploy in the terminal:
-#
-#   bash src/tego_control/build.sh
-#
-# 两种模式 / Two modes:
-#   完整构建    安装依赖 + 构建工作区 + 校验
-#   Full build    install dependencies, build the workspace, verify
-#   重新构建    先删除 build/install/log, 再重新 colcon build + 校验
-#   Rebuild       delete build/install/log first, then rebuild and verify
-#
-# 脚本自动探测工作区、ROS 2 与 Conda; 已满足的步骤自动跳过, 可以反复执行。
-# The script auto-detects the workspace, ROS 2 and Conda. Already satisfied steps
-# are skipped, so it is safe to re-run.
-#
-# root 权限只用于 apt 安装与 rosdep init, 会在需要时一次性征得。
-# Root is needed only for apt install and rosdep init, and is requested once.
-#
-# 管道、CI 等非交互环境下所有提问自动取默认值 (完整构建 / both)。
-# In a non-interactive shell (pipe, CI) every question takes its default value
-# (full build / both).
-#
-# 兼容 start_*.sh 的环境变量约定 / Same environment variables as start_*.sh:
-#   WORKSPACE_DIR / CONDA_BASE / CONDA_ENV / ROS_DISTRO
+# UMA_Control / UMA_SDK 一键构建脚本  ·  one-command build script
 # =============================================================================
 
 set -eo pipefail
@@ -40,13 +14,13 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CONTROL_DIR="${SCRIPT_DIR}"
 PYTHON_BIN="/usr/bin/python3"
-EXPECTED_PKGS=(tego_ros tego_msgs tego_bringup tego_description \
-               agx_arm_msgs agx_arm_ctrl arm_safety_monitor tego_sdk)
+EXPECTED_PKGS=(uma_ros uma_msgs uma_bringup uma_description \
+               agx_arm_msgs agx_arm_ctrl arm_safety_monitor uma_sdk)
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-}"
 ROS_DISTRO="${ROS_DISTRO:-}"
 CONDA_BASE="${CONDA_BASE:-}"
-CONDA_ENV="${CONDA_ENV:-tego}"
+CONDA_ENV="${CONDA_ENV:-uma}"
 
 OPERATION=""            # full | rebuild
 OPERATION_LABEL=""
@@ -54,13 +28,6 @@ BACKEND="both"          # cpp | python | both
 DO_CLEAN=0              # 重新构建: 删除 build/install/log
 SKIP_PYTHON=0
 STAGES=()
-
-# 必须和 start_*.sh 的运行时保持一致: 屏蔽 ~/.local 的 user site-packages。
-# 否则用户级 pip 包会盖掉 Conda 环境里的同名包 —— 例如 ~/.local 里的 pin 4.1.0
-# 会遮住 Conda 的 pinocchio 3.2.0, 让本脚本误判版本并触发多余的 conda install。
-# Must match the runtime behaviour of start_*.sh: hide ~/.local user site-packages,
-# otherwise user-level pip packages shadow the Conda env (e.g. pin 4.1.0 in
-# ~/.local hides pinocchio 3.2.0), causing bogus version checks.
 export PYTHONNOUSERSITE=1
 
 # ------------------------------------------- README 中列出的依赖(逐条对应) ---
@@ -75,13 +42,6 @@ APT_PACKAGES=(
 CONDA_PACKAGES=(pinocchio=3.2.0 casadi=3.6.7 scipy typing_extensions exceptiongroup)
 PIP_PACKAGES=(lark numpy==2.0.2 empy==3.3.4 pyyaml opencv-python ur-rtde netifaces meshcat)
 PYAGXARM_URL="git+https://github.com/agilexrobotics/pyAgxArm.git"
-
-# pinocchio 与 casadi 只存在于 conda-forge, Anaconda 的 defaults 频道没有这两个包
-# (defaults 只有 pkgs/main 和 pkgs/r)。不显式指定频道时, 只配置了 defaults 的机器
-# 会在求解阶段直接 PackagesNotFoundError 失败, 报 "casadi=3.6.7 不可用"。
-# pinocchio and casadi exist only on conda-forge, not on Anaconda's defaults channel
-# (which only has pkgs/main and pkgs/r). Without an explicit channel, a machine that
-# only configures defaults fails with PackagesNotFoundError during dependency solving.
 CONDA_CHANNEL=(-c conda-forge)
 
 # ------------------------------------------------------------- 输出与日志 ---
@@ -150,9 +110,6 @@ detect_ros_distros() {
   done
 }
 
-# README 布局: <ws>/src/tego_control + <ws>/src/tego_sdk
-# 并列布局:    <parent>/tego_control + <parent>/tego_sdk
-# README layout: <ws>/src/...   Side-by-side layout: <parent>/...
 locate_workspace() {
   local cand
   if [[ -n "${WORKSPACE_DIR}" ]]; then
@@ -161,27 +118,23 @@ locate_workspace() {
     WORKSPACE_DIR="$(cd -- "${WORKSPACE_DIR}" && pwd)"
   else
     cand="$(cd -- "${CONTROL_DIR}/../.." && pwd)"
-    if [[ -d "${cand}/src/tego_sdk" ]]; then
+    if [[ -d "${cand}/src/UMA_SDK" ]]; then
       WORKSPACE_DIR="${cand}"
-    elif [[ -d "$(dirname -- "${CONTROL_DIR}")/tego_sdk" ]]; then
+    elif [[ -d "$(dirname -- "${CONTROL_DIR}")/UMA_SDK" ]]; then
       WORKSPACE_DIR="$(dirname -- "${CONTROL_DIR}")"
     else
       WORKSPACE_DIR="${cand}"
     fi
   fi
 
-  if   [[ -d "${WORKSPACE_DIR}/src/tego_sdk" ]]; then SDK_DIR="${WORKSPACE_DIR}/src/tego_sdk"
-  elif [[ -d "${WORKSPACE_DIR}/tego_sdk" ]];     then SDK_DIR="${WORKSPACE_DIR}/tego_sdk"
+  if   [[ -d "${WORKSPACE_DIR}/src/UMA_SDK" ]]; then SDK_DIR="${WORKSPACE_DIR}/src/UMA_SDK"
+  elif [[ -d "${WORKSPACE_DIR}/UMA_SDK" ]];     then SDK_DIR="${WORKSPACE_DIR}/UMA_SDK"
   else                                                SDK_DIR=""
   fi
 }
 
 # --------------------------------------------------------------- 交互菜单 ---
 CHOICE=""
-# choose_one <标题> <默认值> <值1> <说明1> [值2 说明2 ...]
-# choose_one <title> <default> <value1> <description1> [value2 description2 ...]
-# 结果写入全局 CHOICE; 非交互终端直接返回默认值, 不会卡住。
-# Result goes to the global CHOICE; a non-interactive terminal returns the default.
 choose_one() {
   local title="$1" defval="$2"; shift 2
   local -a vals=() descs=()
@@ -272,8 +225,6 @@ activate_conda() {
     || die "无法激活 Conda 环境 / cannot activate Conda environment '${CONDA_ENV}'。请先选择「完整构建」安装依赖 / run the \"Full build\" mode first to install dependencies."
 }
 
-# 在已激活的 Conda 环境里检查包; 输出缺失/版本不符的包名 (空表示都满足)
-# Check packages inside the activated Conda env; prints missing/mismatched names
 env_missing_pip() {
   python - "$@" <<'PY' 2>/dev/null || echo "python-unavailable"
 import sys, importlib.metadata as md
@@ -313,8 +264,6 @@ env_python_version_ok() {
   [[ "$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)" == "3.10" ]]
 }
 
-# 在子 shell 中判断某个 import 是否可用 (不污染当前环境)
-# Test an import inside a subshell so the current environment stays clean
 conda_import_ok() {
   ( activate_conda >/dev/null 2>&1 && python -c "import $1" >/dev/null 2>&1 )
 }
@@ -361,11 +310,11 @@ preflight() {
   fi
 
   if [[ -z "${SDK_DIR}" ]]; then
-    MISSING+=("在 / under ${WORKSPACE_DIR} 找不到 tego_sdk / tego_sdk not found —— 两个仓库要并列放在工作区的 src/ 下 / both repositories must sit side by side under src/:
+    MISSING+=("在 / under ${WORKSPACE_DIR} 找不到 UMA_SDK / UMA_SDK not found —— 两个仓库要并列放在工作区的 src/ 下 / both repositories must sit side by side under src/:
 
         mkdir -p ${WORKSPACE_DIR}/src && cd ${WORKSPACE_DIR}/src
-        git clone https://github.com/agilexrobotics/tego_control.git
-        git clone https://github.com/agilexrobotics/tego_sdk.git")
+        git clone https://github.com/agilexrobotics/UMA_Control.git
+        git clone https://github.com/agilexrobotics/UMA_SDK.git")
   fi
 
   if [[ ! -x "${PYTHON_BIN}" ]]; then
@@ -478,8 +427,12 @@ stage_rosdep() {
     say "  ${C_OK}✓${C_RST} rosdep 缓存已存在, 跳过 update / rosdep cache present, skipping update"
   fi
 
-  ensure_sudo
-  run rosdep install --from-paths "${CONTROL_DIR}" "${SDK_DIR}" --ignore-src -r -y
+  if rosdep check --from-paths "${CONTROL_DIR}" "${SDK_DIR}" --ignore-src -r; then
+    say "  ${C_OK}✓${C_RST} 系统依赖已满足, 跳过 / all system dependencies satisfied, skipping"
+  else
+    ensure_sudo
+    run rosdep install --from-paths "${CONTROL_DIR}" "${SDK_DIR}" --ignore-src -r -y
+  fi
 }
 
 stage_build() {
@@ -509,14 +462,10 @@ stage_python() {
     say "  ${C_OK}✓${C_RST} python-can 已安装 / python-can installed"
   fi
 
-  # colcon 只在 install/tego-sdk 下留一个 egg-link, Conda 解释器不认它,
-  # 所以必须再做一次 editable 安装, 否则要到运行期 import tego_sdk 才会报错。
-  # colcon only leaves an egg-link under install/tego-sdk, which the Conda
-  # interpreter does not follow, so an editable install is required here.
   local where=""
-  where="$(python -c 'import os, tego_sdk; print(os.path.dirname(os.path.abspath(tego_sdk.__file__)))' 2>/dev/null || true)"
+  where="$(python -c 'import os, uma_sdk; print(os.path.dirname(os.path.abspath(uma_sdk.__file__)))' 2>/dev/null || true)"
   if [[ "${where}" == "${SDK_DIR}/python" ]]; then
-    say "  ${C_OK}✓${C_RST} tego_sdk 已以 editable 方式安装到环境 / tego_sdk already installed editable into ${CONDA_ENV}"
+    say "  ${C_OK}✓${C_RST} uma_sdk 已以 editable 方式安装到环境 / uma_sdk already installed editable into ${CONDA_ENV}"
   else
     run python -m pip install -e "${SDK_DIR}/python"
   fi
@@ -551,8 +500,8 @@ stage_verify() {
 
   if (( SKIP_PYTHON )); then
     say "  ${C_DIM}– 本次未安装 Python bridge 依赖, 跳过该项检查 / Python bridge deps not installed in this run, skipping this check${C_RST}"
-  elif conda_import_ok "can, tego_sdk"; then
-    say "  ${C_OK}✓${C_RST} Python bridge 依赖 / Python bridge dependencies (python-can/tego_sdk)"
+  elif conda_import_ok "can, uma_sdk"; then
+    say "  ${C_OK}✓${C_RST} Python bridge 依赖 / Python bridge dependencies (python-can/uma_sdk)"
   else
     say "  ${C_ERR}✗${C_RST} Python bridge 依赖缺失 (只影响 Python backend) / Python bridge deps missing (affects the Python backend only)"
     failed=1
@@ -584,17 +533,15 @@ next_steps() {
   say "  1) 配置 CAN / Configure CAN —— 先按 find_all_can_port.sh 的输出改 can_config.sh 里的 bus-info"
   say "     update bus-info in can_config.sh from the find_all_can_port.sh output:"
   say "       cd ${WORKSPACE_DIR}"
-  say "       bash ${rel_ctl}/tego_bringup/scripts/find_all_can_port.sh"
-  say "       bash ${rel_ctl}/tego_bringup/scripts/can_config.sh"
+  say "       bash ${rel_ctl}/uma_bringup/scripts/find_all_can_port.sh"
+  say "       bash ${rel_ctl}/uma_bringup/scripts/can_config.sh"
   say "  2) 启动遥操 / Start teleoperation (脚本会自动激活 / activates the ${CONDA_ENV} environment):"
-  say "       bash ${rel_ctl}/tego_bringup/scripts/start_single_piper_cpp.sh   # Piper 单臂 / single arm"
-  say "       bash ${rel_ctl}/tego_bringup/scripts/start_dual_nero_cpp.sh     # Nero 双臂 / dual arm"
+  say "       bash ${rel_ctl}/uma_bringup/scripts/start_single_piper_cpp.sh   # Piper 单臂 / single arm"
+  say "       bash ${rel_ctl}/uma_bringup/scripts/start_dual_nero_cpp.sh     # Nero 双臂 / dual arm"
   say "       Python backend 用同名的 / use the same-named *_python.sh for the Python backend"
   say "  手动使用工作区 / Use the workspace manually:"
   say "       cd ${WORKSPACE_DIR} && source install/setup.bash"
   if [[ -n "${LOG_FILE}" ]]; then say "  构建日志 / Build log: ${LOG_FILE}"; fi
-  # 必须显式返回 0: 本函数在 set -e 下被当作普通语句调用, 末句返回非零会静默退出
-  # Must return 0 explicitly: called as a plain statement under set -e
   return 0
 }
 
@@ -626,7 +573,7 @@ main() {
     esac
   fi
 
-  say "${C_BLD}tego 构建脚本 / build script${C_RST}  ${C_DIM}(全部通过交互选择 / everything is chosen interactively)${C_RST}"
+  say "${C_BLD}uma 构建脚本 / build script${C_RST}  ${C_DIM}(全部通过交互选择 / everything is chosen interactively)${C_RST}"
   say "  工作区 / workspace ${WORKSPACE_DIR}"
   say "  SDK                ${SDK_DIR:-未找到 / not found}"
   say "  ROS                ${ROS_DISTRO:-未找到 / not found}"
@@ -650,10 +597,6 @@ main() {
   for k in "${NOTES[@]}"; do warn "${C_WARN}!${C_RST} ${k}"; done
 
   # ---- 清理 / Cleanup -----------------------------------------------------
-  # 必须在创建日志文件之前执行: 日志本身就写在 log/ 里, 先建日志再删除会把日志
-  # 一起删掉, 之后任何一次写日志都会因为目录不存在而让脚本退出。
-  # Must run before the log file is created: the log lives in log/, so deleting it
-  # afterwards would break every later write to the log and abort the script.
   if (( DO_CLEAN )); then
     say ""
     say "${C_WARN}重新构建 / Rebuild: 删除 / removing ${WORKSPACE_DIR}/{build,install,log}${C_RST}"

@@ -1,0 +1,84 @@
+robot:
+  name: nero
+  urdf_path: package://uma_description/urdf/nero/urdf/nero_description.urdf  # URDF 路径
+  base_frame: base_link                            # IK 目标位姿的参考坐标系，默认base_link
+  firmware_version: default                           # pyAgxArm 固件版本
+                                                   # 可选: default(<=1.10) | v111(1.11) | v112(1.12)
+                                                   #      | v120(1.20) | v121(>=1.21)
+                                                   # 填错会按错误协议解析 CAN，务必先确认固件版本
+  installation_pos:                                # 通用安装方向: horizontal（正装） / left（左侧装） / right（右侧装）
+    left: left
+    right: right
+  effector_type:                                   # none / agx_gripper / revo2
+    left: agx_gripper
+    right: agx_gripper
+  speed_percent: 100                               # 双臂运动速度百分比，范围 0~100
+  ee_offset:                                       # 末端工具坐标系，URDF没有时用此偏移
+    parent_joint: joint7                           # 挂在哪个关节上
+    xyz: [0.0, 0.0, -0.023]                        # 相对该关节的平移 [x, y, z] (m)
+    rpy: [-1.5708, 0.0, 0.0]                       # 相对该关节的旋转 [r, p, y] (rad)
+  locked_joints: []                                # 需锁定的关节名(裁剪 gripper/灵巧手等非臂关节)
+  collision_pairs: [[5, 0], [5, 1], [5, 2], [5, 3]]  # 自碰撞检测对(link 几何索引:5=joint5, 0..3=基座区)
+
+  # 双臂使用 left/right，并分别填写对应一侧，不要填写两侧通道数量之和
+  arm_home_state:
+    left: [0.1, 1.5708, -1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+    right: [-0.1, 1.5708, 1.5708, 1.6707, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+
+ik:
+  enable_hard_delta_q_constraint: true             # 是否启用单帧最大关节变化硬约束
+  max_delta_q_rad: 0.1                             # 单帧最大关节变化 (rad),标量或按 nq 列表
+  enable_psi_constraint: true                      # 是否启用 psi 肘部构型保持
+  psi_weight: 36.0                                 # psi 约束权重
+  psi_eps: 0.05                                    # psi 数值稳定项
+  enable_joint_reference_penalty: false            # 是否启用关节参考位姿软约束
+  joint_reference_weight: 1.0                      # 关节参考位姿权重
+  enable_elbow_side_penalty: false                 # 是否启用肘部侧向惩罚
+  elbow_side_penalty_weight: 2.0                   # 肘部侧向惩罚权重
+  elbow_side_penalty_sharpness: 15.0               # 肘部侧向惩罚陡度
+  shoulder_frame: shoulder_safety_point            # psi 肩部参考坐标系
+  elbow_frame: elbow_safety_point                  # psi 肘部参考坐标系
+  wrist_frame: wrist_safety_point                  # psi 腕部参考坐标系
+  singularity_weight: 0.02                         # 奇异性惩罚权重
+
+handle:                                            # 手柄桥接参数
+  zoom_factor: 1.4                                 # 手柄位姿增量缩放系数
+
+# 两侧可分别设置工作空间，当前压缩了左右摆动及向上摆动的工作空间，避免碰撞
+safety:
+  safety_frames:
+    shoulder_safety_point: joint1
+    elbow_safety_point: joint4
+    wrist_safety_point: joint5
+  virtual_walls: []
+  workspace:
+    left:
+      frame: base_link
+      type: box
+      min:
+      - -0.62173808217
+      - -0.165470397472
+      - -0.050592643023
+      max:
+      - 0.07826191783
+      - 0.534529602528
+      - 0.349407356977
+      margin: 0.02
+      protected_frames:
+      - ee
+      - link4
+    right:
+      frame: base_link
+      type: box
+      min:
+      - -0.699108654261
+      - -0.624284857512
+      - -0.009604030848
+      max:
+      - 0.100891345739
+      - 0.175715142488
+      - 0.290395969152
+      margin: 0.02
+      protected_frames:
+      - ee
+      - link4

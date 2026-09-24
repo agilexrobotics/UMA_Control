@@ -1,0 +1,17 @@
+uma_ros_node:
+  ros__parameters:
+    trigger_action: false
+    init_action: false
+    # add_angle: false
+    base_reverse: false
+    imu_reverse: false
+    show_imu_data: false
+    use_piper_mode: false
+    handle_seg0: [0.0, 0.0, 0.123, 0.0, 0.0, 0.0]
+    handle_seg1: [0.0, 0.0, 0.0, 1.5707963, -0.1359, 3.1415926]
+    handle_seg2: [0.28503, 0.0, 0.0, 0.0, 0.0, -1.7939]
+    handle_seg3: [-0.022, -0.25075, 0.0, 1.5707963, 0.0, 0.0]
+    use_pose_dt_zoom: false
+    zoom_factor: 1.0
+    use_trigger_pose: false
+    gripper_length: 0.0
