@@ -331,7 +331,7 @@ def build(context):
     bridge_args = {
         "port_name": LaunchConfiguration("port_name"),
         "node_name": f"uma_{side[0]}",
-        "pika_pose_topic": f"/{side}_handle_pose",
+        "uma_pose_topic": f"/{side}_handle_pose",
         "remote_joint_topic_in": f"/control/joint_states_{side}_raw",
         "remote_joint_topic_out": f"/control/move_js_{side}",
         "remote_joint_single_topic": f"/feedback/joint_states_{side}",
@@ -811,7 +811,7 @@ def build(context):
     bridge_args = {
         "port_name": LaunchConfiguration("port_name"),
         "node_name": f"uma_{side[0]}",
-        "pika_pose_topic": f"/{side}_handle_pose",
+        "uma_pose_topic": f"/{side}_handle_pose",
         "remote_joint_topic_in": f"/control/joint_states_{side}_raw",
         "remote_joint_topic_out": f"/control/move_js_{side}",
         "remote_joint_single_topic": f"/feedback/joint_states_{side}",

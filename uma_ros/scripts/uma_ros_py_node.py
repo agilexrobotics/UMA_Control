@@ -327,7 +327,7 @@ class UmaBridgeNode(Node):
             HandleState, "~/handle_state", 200
         )
         self.handle_pose_publisher = self.create_publisher(
-            PoseStamped, "/pika_pose", 200
+            PoseStamped, "/uma_pose", 200
         )
         self.imu_publisher = self.create_publisher(Imu, "~/imu", 200)
         self.remote_joint_publisher = self.create_publisher(

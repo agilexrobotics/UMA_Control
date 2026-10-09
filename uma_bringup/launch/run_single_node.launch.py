@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     port_name = LaunchConfiguration("port_name")
     node_name = LaunchConfiguration("node_name")
-    pika_pose_topic = LaunchConfiguration("pika_pose_topic")
+    uma_pose_topic = LaunchConfiguration("uma_pose_topic")
     remote_joint_topic_in = LaunchConfiguration("remote_joint_topic_in")
     remote_joint_topic_out = LaunchConfiguration("remote_joint_topic_out")
     remote_joint_single_topic = LaunchConfiguration("remote_joint_single_topic")
@@ -54,7 +54,7 @@ def generate_launch_description():
     declared_args = [
         DeclareLaunchArgument("port_name", default_value="can0"),
         DeclareLaunchArgument("node_name", default_value="uma_ros_node"),
-        DeclareLaunchArgument("pika_pose_topic", default_value="/pika_pose"),
+        DeclareLaunchArgument("uma_pose_topic", default_value="/uma_pose"),
         DeclareLaunchArgument(
             "remote_joint_topic_in", default_value="/joint_states_raw"
         ),
@@ -171,7 +171,7 @@ def generate_launch_description():
             }
         ],
         remappings=[
-            ("/pika_pose", pika_pose_topic),
+            ("/uma_pose", uma_pose_topic),
             ("/joint_states_single", remote_joint_single_topic),
             ("/teleop_enable", teleop_enable_topic),
         ],

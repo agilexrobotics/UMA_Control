@@ -57,7 +57,7 @@ void UmaRosMessenger::SetupSubscription()
     }
     sensor_status_publisher_ = this->create_publisher<uma_msgs::msg::MtSensorStatus>("~/mt_sensor_status", 200);
     handle_state_publisher_ = this->create_publisher<uma_msgs::msg::HandleState>("~/handle_state", 200);
-    uma_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/pika_pose", 200);
+    uma_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/uma_pose", 200);
     imu_publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("~/imu", 200);
     remote_joint_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>(remote_joint_topic_out, 200);
     if (effector_type == "agx_gripper")
