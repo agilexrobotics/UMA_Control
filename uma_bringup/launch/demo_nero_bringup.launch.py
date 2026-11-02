@@ -13,7 +13,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 from agx_arm_ctrl.robot_profile import load_profile
-from uma_bringup.bridge_launch import bridge_wrapper_name
+from uma_bringup.bridge_launch import bridge_wrapper_name, recording_control_node
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -118,6 +118,10 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "start_teleop", default_value="true", choices=["true", "false"]
             ),
+            DeclareLaunchArgument(
+                "start_recording_control", default_value="true", choices=["true", "false"]
+            ),
+            recording_control_node(),
             OpaqueFunction(function=build_arm),
             teleop_launch,
             OpaqueFunction(function=build_bridges),

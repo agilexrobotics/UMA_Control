@@ -120,7 +120,7 @@ class Arm_IK:
         self,
         profile,
         logger=None,
-        enable_visualization=True,
+        enable_visualization=False,
         max_delta_q_rad=None,
         enable_hard_delta_q_constraint=None,
         enable_psi_constraint=None,
@@ -426,6 +426,7 @@ class Arm_IK:
                     ).vector,
                 )
             ],
+            {"enable_reverse": False},
         )
 
         # Defining the optimization problem
@@ -739,7 +740,9 @@ class RosOperator(Node):
                 "必须提供 profile_path 参数,例如 uma_bringup/config/nero_profile.yaml"
             )
         self.profile = load_profile(profile_path)
-        self.profile = replace(self.profile, workspace_box=self.profile.workspace_for(self.side))
+        self.profile = replace(
+            self.profile, workspace_box=self.profile.workspace_for(self.side)
+        )
         self.installation_pos = self.profile.installation_pos_for(self.side)
         nq = self.profile.nq
 
@@ -836,7 +839,7 @@ class RosOperator(Node):
         self.inverse_solution = Arm_IK(
             self.profile,
             logger=self.get_logger(),
-            enable_visualization=True,
+            enable_visualization=False,
             max_delta_q_rad=max_delta_q,
             enable_hard_delta_q_constraint=enable_hard_delta_q_constraint,
             enable_psi_constraint=enable_psi_constraint,
@@ -991,9 +994,9 @@ class RosOperator(Node):
 
         joint_states = self.last_ik_joint_state
 
-        # Visualization off by default (enable_vis=False)
+        # Keep MeshCat updates disabled during teleoperation.
         sol_q, tau_ff, is_collision = self.inverse_solution.ik_fun(
-            target.homogeneous, 0, enable_vis=True
+            target.homogeneous, 0, enable_vis=False
         )
 
         if b and sol_q is not None:

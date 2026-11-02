@@ -36,6 +36,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <std_msgs/msg/float64.hpp>
 
 #include "uma_msgs/msg/mt_sensor_status.hpp"
@@ -123,6 +124,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr uma_pose_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr nero_gripper_publisher_;
+    rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr recording_toggle_publisher_;
 
     // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr remote_joint_subscriber_;

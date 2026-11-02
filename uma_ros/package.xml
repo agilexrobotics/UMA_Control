@@ -12,6 +12,7 @@
   <depend>uma_sdk</depend>
   <depend>uma_msgs</depend>
   <depend>rclcpp</depend>
+  <exec_depend>rclpy</exec_depend>
   <depend>rcl_interfaces</depend>
   <depend>eigen</depend>
   <depend>std_msgs</depend>

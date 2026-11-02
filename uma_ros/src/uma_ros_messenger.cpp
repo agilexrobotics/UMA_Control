@@ -51,6 +51,7 @@ void UmaRosMessenger::SetupSubscription()
 
     // Publisher
     joint_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>("~/joint", 200);
+    recording_toggle_publisher_ = this->create_publisher<std_msgs::msg::Empty>("/recording/toggle", 10);
     if (publish_sim_joint_)
     {
         sim_joint_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states_single", 200);
@@ -746,6 +747,16 @@ void UmaRosMessenger::AnalyzeKeyEventAction(uint8_t key_id, uint8_t click_type)
                           node_name.find("left") != std::string::npos;
     bool is_right_handle = node_name.find("_r") != std::string::npos ||
                            node_name.find("right") != std::string::npos;
+    bool is_outside_key = (is_left_handle && key_id == KEY_LEFT) ||
+                          (is_right_handle && key_id == KEY_RIGHT);
+    if (is_outside_key)
+    {
+        if (click_type == CLICK_DOUBLE)
+        {
+            recording_toggle_publisher_->publish(std_msgs::msg::Empty{});
+        }
+        return;
+    }
     bool is_inside_key = (!is_left_handle && !is_right_handle) ||
                          (is_left_handle && key_id == KEY_RIGHT) ||
                          (is_right_handle && key_id == KEY_LEFT);

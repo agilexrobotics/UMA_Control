@@ -1,17 +1,47 @@
-# CHANGELOG
+# Changelog
+
+本文件记录 UMA_Control 的重要变更，格式遵循 [Keep a Changelog 1.1.0](https://keepachangelog.com/zh-CN/1.1.0/)。
+
+## [Unreleased]
+
+### Added
+
+- 增加 Piper X 单臂遥操配置、URDF 模型和网格文件，以及 C++、Python 启动脚本。`demo_piper.launch.py` 支持 `arm_type:=piper_x`，自动选择对应驱动型号和默认配置文件。
+- 增加全局采集请求控制：双击左手柄 K1 或右手柄 K2，切换同一个采集请求。`recording_control` 发布 `/recording/requested`，提供 `/recording/toggle` 和 `/recording/set_requested` 接口；实际采集由接入的 Web 采集端执行。
+- 增加 `robot.firmware_version` 配置，将机械臂固件协议版本传递给 pyAgxArm 驱动。
+- 增加 `build.sh`，提供环境检查、依赖安装和工作空间构建入口。
+
+### Changed
+
+- **不兼容变更**：项目更名为 UMA_Control，ROS 包及相关标识由 `tego_*` 改为 `uma_*`，依赖仓库改为 UMA_SDK。升级时需更新包名、导入路径和启动命令；手柄 CAN 设备默认名称改为 `left_uma`、`right_uma`。
+- **不兼容变更**：启动参数 `pika_pose_topic` 改为 `uma_pose_topic`，默认位姿话题 `/pika_pose` 改为 `/uma_pose`。自定义 launch 文件和话题订阅需同步更新。
+- `robot.effector_type` 统一控制末端执行器开关和类型。末端类型、回零姿态和工作空间支持 `left/right/default` 配置，保留共享配置支持；安全空间编辑器按侧保存工作空间，并保留另一侧配置。
+- `installation_pos` 的 `horizontal`、`left`、`right` 统一表示机械臂物理安装方向；`side` 用于左右 CAN、话题、服务和节点路由。Piper 重力补偿使用相同的安装方向配置。
+- Nero、Piper 的 C++ 和 Python 启动脚本自动激活 Conda 环境，并隔离用户 site-packages。默认环境名称为 `uma`，支持通过 `CONDA_BASE` 和 `CONDA_ENV` 指定安装目录与环境名称。
+- 遥操默认关闭 MeshCat 可视化及逐帧显示更新。
+- README 将按键操作整理为表格，补充 Anaconda 和自定义 Conda 路径排障；使用说明补充手柄初始化零位与上电操作，适配指南提供中英文内容。
+
+### Fixed
+
+- 修复正装 Piper、Nero 遥操时，末端回零姿态导致平移 x/z 方向互换的问题。
+- 修复正装遥操开启时的坐标映射：根据手柄水平前向建立本次遥操的固定映射，平移与旋转共用该映射，并以实时机械臂位姿作为起点。位姿无效、反馈过期或手柄朝向接近竖直时拒绝开启。
+- 修复关闭遥操或反馈超时后安装映射未清除的问题，下次开启时重新建立映射。
+- 接通 Piper、Nero 的夹爪命令，使其按末端执行器配置执行。
+- 将 `recording_control_node.py` 安装到 `uma_ros` 的可执行目录，修复示例启动时找不到该脚本的问题。
+- 修复 IK 在零旋转等姿态下计算误差导数时产生 NaN 的问题；位姿误差函数使用前向自动微分。
 
 ## [0.1.0] - 2026-09-04
 
-首个面向 Nero 与 Piper 遥操的稳定版本。
+### Added
 
-- 末端类型和 workspace 支持 `left/right/default`，兼容旧共享配置；Piper/Nero 回零统一按 side/default 选择。安全编辑器支持按侧保存，保留另一侧配置。
-- 将 `horizontal`、`left`、`right` 定义为所有机械臂通用的物理安装方向；`side` 继续只负责左右 CAN、topic、service 和节点路由。
-- 正装 Piper/Nero 可直接使用 `installation_pos: horizontal`，避免末端 home 姿态导致平移 x/z 互换；Piper 同时使用该值设置重力补偿。
-- 正装遥操在每次开启时对齐手柄水平前向，平移和旋转共用固定会话映射；以实时机械臂位姿为起点，拒绝无效、过期或朝向接近竖直的开启请求。侧装映射保持不变。
-- 补充手柄初始化零位与上电操作说明，适配指南提供英文、中文折叠章节。
-- 反馈超时或关闭遥操时同步清除本次安装映射，下一次遥操会重新建立会话映射。
-- Nero/Piper 的 C++ 和 Python 启动脚本会自动激活 `tego` Conda 环境，并隔离用户 site-packages
-- 统一 `left_arm` / `right_arm` 接口、launch、启动脚本和 C++/Python bridge 行为。
-- 增加 Piper 单臂和 Nero 双臂示例，以及 profile 驱动的 URDF、IK、回零和安全约束。
-- `robot.effector_type` 统一控制末端执行器开关和类型，并接通 Piper/Nero 夹爪命令。
-- 提供机械臂适配指南和离线 RViz 安全空间编辑器，可编辑并保存 workspace 与virtual walls。
+- 提供 Nero 双臂和 Piper 单臂遥操示例，以及 C++、Python 启动入口；Piper 单臂支持左右侧选择。
+- 引入机械臂配置文件，集中配置 URDF、IK、回零姿态和安全约束。
+- 提供离线 `arm_safety_monitor` RViz 安全空间编辑器，可调整机械臂姿态，创建、编辑并保存工作空间 Box 和虚拟墙 Plane；支持显示虚拟墙法向量、翻转法向量，并将修改写回配置文件。
+- 提供 C++、Python 使用说明和机械臂适配指南。
+
+### Changed
+
+- 统一 `left_arm`、`right_arm` 接口及对应 launch 和启动脚本，统一 C++、Python 桥接节点的话题、服务和遥操行为。
+
+[Unreleased]: https://github.com/agilexrobotics/UMA_Control/compare/27a49e69ef43c0b80c51bc1aafda3ef2a1e543fb...HEAD
+[0.1.0]: https://github.com/agilexrobotics/UMA_Control/tree/27a49e69ef43c0b80c51bc1aafda3ef2a1e543fb

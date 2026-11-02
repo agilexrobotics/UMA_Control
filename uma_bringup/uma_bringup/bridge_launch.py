@@ -6,6 +6,7 @@ from typing import Dict
 from agx_arm_ctrl.robot_profile import format_arm_home_state, load_profile
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -21,6 +22,17 @@ _HANDLE_SEGMENTS = {
 
 # nero 手柄 wrapper 用实例名 "arm"(left_arm.launch.py),piper 用机型名
 _BRIDGE_WRAPPER_MODEL = {"nero": "arm", "piper": "piper"}
+
+
+def recording_control_node():
+    """Start once per session, shared by both handle bridges and all backends."""
+    return Node(
+        package="uma_ros",
+        executable="recording_control_node.py",
+        name="recording_control",
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("start_recording_control")),
+    )
 
 
 def bridge_wrapper_name(arm_type: str, side: str, backend: str) -> str:

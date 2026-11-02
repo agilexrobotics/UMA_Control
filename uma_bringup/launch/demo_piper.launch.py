@@ -1,9 +1,3 @@
-"""Piper single-arm demo: arm driver + Pinocchio teleop + handle bridge.
-
-一个入口覆盖全部组合:``side:=left/right``(默认 right)、``backend:=cpp/python``(默认 cpp)。
-安装朝向从 profile 读取(``robot.installation_pos``)。
-"""
-
 from pathlib import Path
 
 from launch import LaunchDescription
@@ -18,7 +12,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 from agx_arm_ctrl.robot_profile import load_profile
-from uma_bringup.bridge_launch import bridge_wrapper_name
+from uma_bringup.bridge_launch import bridge_wrapper_name, recording_control_node
 
 
 def resolve_driver_settings(profile_path: str, side: str):
@@ -32,6 +26,7 @@ def resolve_driver_settings(profile_path: str, side: str):
 
 
 def generate_launch_description() -> LaunchDescription:
+    arm_type = LaunchConfiguration("arm_type")
     arm_port = LaunchConfiguration("arm_port")
     port_name = LaunchConfiguration("port_name")
     gripper_width_min = LaunchConfiguration("gripper_width_min")
@@ -64,7 +59,7 @@ def generate_launch_description() -> LaunchDescription:
                 ),
                 launch_arguments={
                     "can_port": arm_port,
-                    "arm_type": "piper",
+                    "arm_type": arm_type,
                     "effector_type": effector_type,
                     "installation_pos": installation_pos,
                     "firmware_version": firmware_version,
@@ -106,6 +101,12 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument(
+                "arm_type",
+                default_value="piper",
+                choices=["piper", "piper_x"],
+                description="Single-arm model; selects the driver and default profile.",
+            ),
+            DeclareLaunchArgument(
                 "arm_port",
                 default_value="right_arm",
                 description="SocketCAN interface of the Piper arm.",
@@ -133,12 +134,19 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("log_level", default_value="info"),
             DeclareLaunchArgument(
                 "profile_path",
-                default_value=PathJoinSubstitution(
-                    [FindPackageShare("uma_bringup"), "config", "piper_profile.yaml"]
-                ),
+                default_value=[
+                    FindPackageShare("uma_bringup"),
+                    "/config/",
+                    arm_type,
+                    "_profile.yaml",
+                ],
             ),
             DeclareLaunchArgument("start_arm", default_value="true"),
             DeclareLaunchArgument("start_teleop", default_value="true"),
+            DeclareLaunchArgument(
+                "start_recording_control", default_value="true", choices=["true", "false"]
+            ),
+            recording_control_node(),
             OpaqueFunction(function=build),
         ]
     )

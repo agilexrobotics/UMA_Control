@@ -16,7 +16,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Empty as EmptyMsg
 from std_srvs.srv import Empty, SetBool, Trigger
 from tf2_ros import TransformBroadcaster
 
@@ -330,6 +330,9 @@ class UmaBridgeNode(Node):
             PoseStamped, "/uma_pose", 200
         )
         self.imu_publisher = self.create_publisher(Imu, "~/imu", 200)
+        self.recording_toggle_publisher = self.create_publisher(
+            EmptyMsg, "/recording/toggle", 10
+        )
         self.remote_joint_publisher = self.create_publisher(
             JointState, self.remote_joint_topic_out, 200
         )
@@ -956,6 +959,7 @@ class UmaBridgeNode(Node):
         KEY_LEFT = 0x01, KEY_RIGHT = 0x02; CLICK_DOUBLE = 0x02, CLICK_LONG = 0x03.
         Left handle toggles teleop with the RIGHT (inner) key; right handle with
         the LEFT (inner) key. Double click toggles teleop; long press returns home.
+        The outer key double click requests a global recording toggle.
         """
         KEY_LEFT = 0x01
         KEY_RIGHT = 0x02
@@ -968,6 +972,14 @@ class UmaBridgeNode(Node):
         is_right_handle = (
             "right" in self.node_name_param or "_r" in self.node_name_param
         )
+        is_outside_key = (
+            (is_left_handle and key_id == KEY_LEFT)
+            or (is_right_handle and key_id == KEY_RIGHT)
+        )
+        if is_outside_key:
+            if click_type == CLICK_DOUBLE:
+                self.recording_toggle_publisher.publish(EmptyMsg())
+            return
         is_inside_key = (
             (not is_left_handle and not is_right_handle)
             or (is_left_handle and key_id == KEY_RIGHT)

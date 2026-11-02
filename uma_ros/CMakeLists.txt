@@ -33,6 +33,7 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/uma_ros_py_node.py
+  scripts/recording_control_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
