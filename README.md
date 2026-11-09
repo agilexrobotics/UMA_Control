@@ -30,6 +30,22 @@ Choose a mode when the script prompts:
 
 Both bridge backends use Python IK and require the `uma` Conda environment. The `python` backend also needs `python-can` and the Python SDK. Colcon builds the C++ packages for either selection.
 
+| Ubuntu | Native ROS 2 | Conda Python |
+| --- | --- | --- |
+| 22.04 | Humble | 3.10 |
+| 24.04 | Jazzy | 3.12 |
+
+Install the matching ROS distribution using the [official instructions](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) before running `build.sh`. The build and startup scripts select the distribution from the operating system inside the current environment. The native 24.04 installation uses Jazzy directly. Pinocchio 3.2.0 and CasADi 3.6.7 remain pinned.
+
+For migration, use a fresh workspace containing the two source repositories. Build artifacts contain absolute paths and Python extensions specific to the ROS distribution. If an existing `uma` environment uses Python 3.10, create a separate environment through the full build:
+
+```bash
+CONDA_ENV=uma_jazzy bash src/UMA_Control/build.sh
+CONDA_ENV=uma_jazzy bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh
+```
+
+Use the same `CONDA_ENV` for subsequent starts. An incompatible Python version or workspace platform record stops startup before launching nodes. Use the rebuild mode when migrating an existing workspace after preparing the matching Conda environment.
+
 | Package / directory | Responsibility |
 | --- | --- |
 | `uma_bringup` | Demo launches, CAN scripts and robot profiles |
@@ -125,8 +141,9 @@ cd ~/uma
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate uma
-source /opt/ros/humble/setup.bash
-source install/setup.bash
+source src/UMA_Control/platform.sh
+WORKSPACE_DIR="$PWD"
+uma_source_environment
 export PYTHONNOUSERSITE=1
 ```
 
@@ -408,6 +425,22 @@ bash src/UMA_Control/build.sh
 
 C++ 和 Python 桥接都使用 Python 逆运动学（IK），因此都需要 `uma` Conda 环境。选择 `python` 时还会安装 `python-can` 和 Python SDK。两种选择都会通过 colcon 构建 C++ 包。
 
+| Ubuntu | 原生 ROS 2 | Conda Python |
+| --- | --- | --- |
+| 22.04 | Humble | 3.10 |
+| 24.04 | Jazzy | 3.12 |
+
+运行 `build.sh` 前，按 [ROS 官方说明](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)安装对应发行版。构建和启动脚本根据当前运行环境内的系统版本选择 ROS 与 Python。Ubuntu 24.04 原生使用 Jazzy，IK 继续使用 Pinocchio 3.2.0 和 CasADi 3.6.7。
+
+迁移到 24.04 时，在新工作空间中放入两个源码仓库后构建。构建产物包含绝对路径及对应 ROS/Python 版本的扩展模块。如果现有 `uma` 环境使用 Python 3.10，可以指定新的环境名称：
+
+```bash
+CONDA_ENV=uma_jazzy bash src/UMA_Control/build.sh
+CONDA_ENV=uma_jazzy bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh
+```
+
+构建时选择“完整构建”，后续启动使用相同的 `CONDA_ENV`。Python 版本或工作区平台不匹配时，脚本会在启动节点前报错。迁移已有工作空间时，先准备好匹配的 Conda 环境，再选择“重新构建”，重新生成 `build/ install/ log/`。
+
 | 包 / 目录 | 用途 |
 | --- | --- |
 | `uma_bringup` | 示例启动文件、CAN 脚本和机械臂配置文件（profile） |
@@ -486,8 +519,9 @@ cd ~/uma
 CONDA_BASE="${CONDA_BASE:-$HOME/miniconda3}"
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 conda activate uma
-source /opt/ros/humble/setup.bash
-source install/setup.bash
+source src/UMA_Control/platform.sh
+WORKSPACE_DIR="$PWD"
+uma_source_environment
 export PYTHONNOUSERSITE=1
 ```
 

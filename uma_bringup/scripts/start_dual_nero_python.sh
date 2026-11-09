@@ -30,12 +30,12 @@ fi
 
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV}"
-source /opt/ros/humble/setup.bash
-source "${WORKSPACE_DIR}/install/setup.bash"
+source "${SCRIPT_DIR}/../../platform.sh"
+uma_source_environment
 
 set -u
 
-CONDA_SITE="${CONDA_SITE:-${CONDA_PREFIX:+${CONDA_PREFIX}/lib/python3.10/site-packages}}"
+CONDA_SITE="${CONDA_SITE:-${CONDA_PREFIX}/lib/python${UMA_PYTHON_VERSION}/site-packages}"
 
 if [[ -n "${CONDA_SITE}" && "${PYTHONPATH:-}" == *"${CONDA_SITE}"* ]]; then
   PYTHONPATH="${PYTHONPATH//${CONDA_SITE}/}"

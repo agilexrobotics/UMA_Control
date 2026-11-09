@@ -6,6 +6,7 @@
 
 ### Added
 
+- 增加 Ubuntu 24.04 原生 Jazzy/Python 3.12 环境适配；构建和启动脚本按系统版本选择 ROS 与 Python，检查工作区平台和 Python 版本，支持 Nero、Piper、Piper X 的 C++、Python 启动入口。
 - 增加 Piper X 单臂遥操配置、URDF 模型和网格文件，以及 C++、Python 启动脚本。`demo_piper.launch.py` 支持 `arm_type:=piper_x`，自动选择对应驱动型号和默认配置文件。
 - 增加全局采集请求控制：双击左手柄 K1 或右手柄 K2，切换同一个采集请求。`recording_control` 发布 `/recording/requested`，提供 `/recording/toggle` 和 `/recording/set_requested` 接口；实际采集由接入的 Web 采集端执行。
 - 增加 `robot.firmware_version` 配置，将机械臂固件协议版本传递给 pyAgxArm 驱动。
