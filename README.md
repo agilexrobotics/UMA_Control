@@ -2,22 +2,6 @@
 
 [English](#english) | [中文](#中文)
 
-## Quick start / 快速开始
-
-**English**
-
-1. From `~/uma`, run `bash src/UMA_Control/build.sh`; create the workspace and clone both repositories first when needed.
-2. Run `bash src/UMA_Control/uma_bringup/scripts/can_config.sh` to configure the CAN interfaces.
-3. Choose a startup command from the [English](#english) section.
-4. Run the checks in [Verification](#验证).
-
-**中文**
-
-1. 在 `~/uma` 工作空间运行 `bash src/UMA_Control/build.sh`；首次使用时先按“工作空间、依赖与构建”创建目录并克隆仓库。
-2. 运行 `bash src/UMA_Control/uma_bringup/scripts/can_config.sh` 配置 CAN 接口。
-3. 从[中文](#中文)选择一组启动命令。
-4. 按[验证](#验证)检查构建、接口、启动日志和真机运动。
-
 <a id="english"></a>
 ## English
 
@@ -810,13 +794,3 @@ ros2 launch arm_safety_monitor safety_monitor.launch.py \
 真机调试的速度限制和停止机制由机械臂驱动及硬件提供。
 
 </details>
-
-<a id="验证"></a>
-## 验证
-
-按改动范围执行对应检查，并在交付说明中写明结果：
-
-1. 文档、配置或 profile 改动：运行 `git diff --check -- README.md CHANGELOG.md arm_adaptance_guide.md`，检查 Markdown 代码块、链接、YAML 示例和命令是否完整。
-2. 构建脚本或依赖改动：从 `~/uma` 运行 `bash src/UMA_Control/build.sh`，选择“完整构建”或“重新构建”，确认工作空间构建和启动校验通过。
-3. 启动文件或 ROS 接口改动：按[运动与通信检查](#运动与通信检查)检查话题、服务和启动日志，确认虚拟目标可达。
-4. 真机控制改动：确认急停可用，设置硬件低速，再测试平移、旋转、回零、夹爪和反馈超时。
