@@ -64,6 +64,7 @@ def generate_launch_description() -> LaunchDescription:
                     "installation_pos": installation_pos,
                     "firmware_version": firmware_version,
                     "topics_end": f"_{side_val}",
+                    "node_name": f"agx_arm_ctrl_{side_val}_node",
                     "log_level": log_level,
                 }.items(),
                 condition=IfCondition(start_arm),

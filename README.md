@@ -2,9 +2,21 @@
 
 [English](#english) | [中文](#中文)
 
-`UMA_Control` integrates a six-axis teaching handle with ROS 2. It provides the ROS bridge, Nero/Piper examples, profile-driven Pinocchio IK, and safety constraints. Low-level CAN communication is provided by [`UMA_SDK`](https://github.com/agilexrobotics/UMA_SDK).
+## Quick start / 快速开始
 
-`UMA_Control` 将六轴示教器接入 ROS 2，提供 ROS 桥接、Nero/Piper 遥操示例、基于 profile 配置的 Pinocchio 逆运动学和安全约束。底层 CAN 通信由 [`UMA_SDK`](https://github.com/agilexrobotics/UMA_SDK) 提供。
+**English**
+
+1. From `~/uma`, run `bash src/UMA_Control/build.sh`; create the workspace and clone both repositories first when needed.
+2. Run `bash src/UMA_Control/uma_bringup/scripts/can_config.sh` to configure the CAN interfaces.
+3. Choose a startup command from the [English](#english) section.
+4. Run the checks in [Verification](#验证).
+
+**中文**
+
+1. 在 `~/uma` 工作空间运行 `bash src/UMA_Control/build.sh`；首次使用时先按“工作空间、依赖与构建”创建目录并克隆仓库。
+2. 运行 `bash src/UMA_Control/uma_bringup/scripts/can_config.sh` 配置 CAN 接口。
+3. 从[中文](#中文)选择一组启动命令。
+4. 按[验证](#验证)检查构建、接口、启动日志和真机运动。
 
 <a id="english"></a>
 ## English
@@ -112,6 +124,9 @@ bash src/UMA_Control/uma_bringup/scripts/start_single_piper_python.sh
 bash src/UMA_Control/uma_bringup/scripts/start_single_piper_x_cpp.sh
 bash src/UMA_Control/uma_bringup/scripts/start_single_piper_x_python.sh
 
+# Piper X dual arm, both mounted upright
+bash src/UMA_Control/uma_bringup/scripts/start_dual_piper_x_cpp.sh
+
 # Left CAN pair / 左侧 CAN 接口
 SIDE=left bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh \
   arm_port:=left_arm port_name:=left_uma
@@ -119,7 +134,9 @@ SIDE=left bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh \
 
 `SIDE` selects the single-arm ROS route. With left-side CAN names, also pass `arm_port:=left_arm port_name:=left_uma`; changing `SIDE` alone keeps the demo's right-side port defaults. Choose one bridge backend per interface.
 
-The Piper X scripts select `arm_type:=piper_x` and `piper_x_profile.yaml`. They use the same `SIDE`, `CONDA_BASE`, `CONDA_ENV` and port arguments as the Piper scripts. For a direct launch, run `ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x`.
+The single-arm Piper X scripts select `arm_type:=piper_x` and `piper_x_profile.yaml`. They use the same `SIDE`, `CONDA_BASE`, `CONDA_ENV` and port arguments as the Piper scripts. For a direct launch, run `ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x`.
+
+The dual-arm script connects the arms through `left_arm` and `right_arm`, and the handles through `left_uma` and `right_uma`. Both sides use `piper_x_profile.yaml` with upright mounting (`installation_pos: horizontal`). Override the interfaces with `left_arm_port`, `right_arm_port`, `left_port_name` and `right_port_name`. A custom `profile_path` must specify upright mounting and the workspace for each side.
 
 | Script setting | Default / use |
 | --- | --- |
@@ -153,6 +170,9 @@ Then choose one entry point:
 ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=cpp
 ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
 ros2 launch uma_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x
+ros2 launch uma_bringup demo_dual_piper_x.launch.py
+ros2 launch uma_bringup demo_dual_piper_x.launch.py backend:=python
 ros2 launch uma_bringup demo_piper.launch.py side:=left backend:=python \
   arm_port:=left_arm port_name:=left_uma
 ```
@@ -252,7 +272,7 @@ Fresh joint feedback is required before teleoperation starts. A feedback timeout
 
 Both outer keys control one shared recording request. Both C++ and Python bridges publish toggle events to one `recording_control` node, which publishes `/recording/requested`. The web collector subscribes to that flag and starts or stops its collection launch. It can correct the request through `/recording/set_requested` if collection fails.
 
-The Nero and Piper demos start one recording-control node by default. When combining launch entries, start it only once and pass `start_recording_control:=false` to the others. For manually launched handle bridges, run `ros2 run uma_ros recording_control_node.py` once. Subscribers using transient-local durability receive the latest flag even when they join later. The web collector is responsible for running collection launches.
+The Nero, Piper and Piper X demos start one recording-control node by default. When combining launch entries, start it only once and pass `start_recording_control:=false` to the others. For manually launched handle bridges, run `ros2 run uma_ros recording_control_node.py` once. Subscribers using transient-local durability receive the latest flag even when they join later. The web collector is responsible for running collection launches.
 
 Demo launch arguments:
 
@@ -260,16 +280,17 @@ Demo launch arguments:
 | --- | --- | --- |
 | `backend` | `cpp` | Handle bridge implementation |
 | `arm_type` | `piper` in `demo_piper.launch.py` | Single-arm model: `piper` or `piper_x`; also selects the default profile |
-| `side` | `right` for Piper | Single-arm communication route |
+| `side` | `right` for Piper / Piper X | Single-arm communication route |
 | `profile_path` | Example profile | URDF, IK, mounting, and safety configuration |
 | `start_arm` | `true` | Start the example arm driver |
 | `start_teleop` | `true` | Start the IK teleoperator |
+| `start_recording_control` | `true` | Start the shared recording-control node |
 | `gripper_width_min/max` | `0.00/0.07` | Gripper range in metres |
 | `pub_rate` | `200.0` | Bridge publication rate in Hz |
 | `log_level` | `info` | Bridge and example-driver logging |
-| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper arm and handle CAN ports |
-| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero arm CAN ports |
-| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero handle CAN ports |
+| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper / Piper X single-arm CAN ports |
+| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero / Piper X dual-arm CAN ports |
+| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero / Piper X dual-arm handle CAN ports |
 
 </details>
 
@@ -505,12 +526,17 @@ bash src/UMA_Control/uma_bringup/scripts/start_single_piper_python.sh
 bash src/UMA_Control/uma_bringup/scripts/start_single_piper_x_cpp.sh
 bash src/UMA_Control/uma_bringup/scripts/start_single_piper_x_python.sh
 
+# Piper X 双臂，两侧均正装
+bash src/UMA_Control/uma_bringup/scripts/start_dual_piper_x_cpp.sh
+
 # Left CAN pair / 左侧 CAN 接口
 SIDE=left bash src/UMA_Control/uma_bringup/scripts/start_single_piper_cpp.sh \
   arm_port:=left_arm port_name:=left_uma
 ```
 
-Piper X 脚本会选择 `arm_type:=piper_x` 和 `piper_x_profile.yaml`，并支持 `SIDE`、`CONDA_BASE`、`CONDA_ENV` 及 CAN 端口参数。使用左侧接口时，设置 `SIDE=left`，同时传入 `arm_port:=left_arm port_name:=left_uma`。手动启动可执行 `ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x`。
+Piper X 单臂脚本会选择 `arm_type:=piper_x` 和 `piper_x_profile.yaml`，并支持 `SIDE`、`CONDA_BASE`、`CONDA_ENV` 及 CAN 端口参数。使用左侧接口时，设置 `SIDE=left`，同时传入 `arm_port:=left_arm port_name:=left_uma`。手动启动可执行 `ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x`。
+
+双臂脚本使用 `left_arm`、`right_arm` 连接机械臂，使用 `left_uma`、`right_uma` 连接示教器。两侧默认加载正装配置 `piper_x_profile.yaml`（`installation_pos: horizontal`）。可通过 `left_arm_port`、`right_arm_port`、`left_port_name`、`right_port_name` 修改接口名称；自定义 `profile_path` 时，请为两侧设置正装方向和各自的工作空间。
 
 手动执行 `ros2 launch` 前，每个终端先加载环境：
 
@@ -531,6 +557,9 @@ export PYTHONNOUSERSITE=1
 ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=cpp
 ros2 launch uma_bringup demo_nero_bringup.launch.py backend:=python
 ros2 launch uma_bringup demo_piper.launch.py
+ros2 launch uma_bringup demo_piper.launch.py arm_type:=piper_x
+ros2 launch uma_bringup demo_dual_piper_x.launch.py
+ros2 launch uma_bringup demo_dual_piper_x.launch.py backend:=python
 ros2 launch uma_bringup demo_piper.launch.py side:=left backend:=python \
   arm_port:=left_arm port_name:=left_uma
 ```
@@ -565,7 +594,7 @@ Piper X 配置包含 6 个机械臂关节和 3 个末端通道，默认使用 `a
 
 `side: left/right` 选择 ROS 路由，CAN 端口通过启动参数单独指定。`installation_pos: horizontal/left/right` 描述安装方向。正装 Piper/Nero 使用 `horizontal`，左右路由均可。
 
-`installation_pos`、`effector_type`、`arm_home_state` 支持 `left/right/default` 配置项。`safety.workspace` 支持共享 Box，也支持按这三个配置项分别设置。加载时优先读取当前侧，再读取 `default`；两者都缺失时会报错。末端类型字符串和共享工作空间配置也受支持。
+`installation_pos`、`effector_type`、`arm_home_state` 支持 `left/right/default` 配置项。`safety.workspace` 支持共享 Box，也支持按这三个配置项分别设置。加载时优先读取当前侧，再读取 `default`；两者都缺失时会报错。也支持字符串形式的末端类型和共享工作空间。
 
 ```yaml
 robot:
@@ -622,7 +651,7 @@ Piper 控制器还使用 `installation_pos` 设置重力补偿方向。
 | `/left_teleop_trigger`, `/right_teleop_trigger` | `std_srvs/srv/Trigger` | 切换遥操 |
 | `/recording/toggle` | `std_msgs/msg/Empty` | 任一外侧录制键请求一次全局采集切换 |
 | `/recording/requested` | `std_msgs/msg/Bool` | 全局采集请求，初始 false；transient-local 保留最新标志 |
-| `/recording/set_requested` | `std_srvs/srv/SetBool` | Web 端设置或清除全局采集请求 |
+| `/recording/set_requested` | `std_srvs/srv/SetBool` | Web 采集端设置或清除全局采集请求 |
 
 自有驱动至少需要发布 `/feedback/joint_states_{side}`，并订阅 `/control/move_js_{side}`。关节单位为 rad。关节名称、方向、零位、使能、夹爪和厂商通信由驱动负责。
 
@@ -630,7 +659,7 @@ Piper 控制器还使用 `installation_pos` 设置重力补偿方向。
 
 两个外侧按键共用一个采集请求。C++ 和 Python 桥接节点将切换事件发送给同一个 `recording_control` 节点，由该节点发布 `/recording/requested`。Web 采集端订阅此标志，负责启动或关闭整体采集；采集失败时，可通过 `/recording/set_requested` 校正请求状态。
 
-Nero 和 Piper 示例默认启动一个采集控制节点。组合多个启动入口时，只启动一个，其余入口传入 `start_recording_control:=false`。单独启动手柄桥接节点时，另执行一次 `ros2 run uma_ros recording_control_node.py`。使用 transient-local QoS 的订阅者稍后接入时，也能取得最新请求状态。实际采集由 Web 采集端执行。
+Nero、Piper 和 Piper X 示例默认启动一个采集控制节点。组合多个启动入口时，只启动一个，其余入口传入 `start_recording_control:=false`。单独启动手柄桥接节点时，另执行一次 `ros2 run uma_ros recording_control_node.py`。使用 transient-local QoS 的订阅者稍后接入时，也能取得最新请求状态。实际采集由 Web 采集端执行。
 
 示例启动参数：
 
@@ -638,16 +667,17 @@ Nero 和 Piper 示例默认启动一个采集控制节点。组合多个启动�
 | --- | --- | --- |
 | `backend` | `cpp` | 示教器桥接实现 |
 | `arm_type` | `demo_piper.launch.py` 中为 `piper` | 单臂型号，支持 `piper`、`piper_x`，同时选择默认 profile |
-| `side` | Piper 为 `right` | 单臂通信路由 |
+| `side` | Piper / Piper X 为 `right` | 单臂通信路由 |
 | `profile_path` | 对应示例 profile | URDF、IK、安装方向和安全配置 |
 | `start_arm` | `true` | 启动示例机械臂驱动 |
 | `start_teleop` | `true` | 启动 IK 遥操节点 |
+| `start_recording_control` | `true` | 启动全局采集控制节点 |
 | `gripper_width_min/max` | `0.00/0.07` | 夹爪范围，单位 m |
 | `pub_rate` | `200.0` | 桥接节点发布频率，单位 Hz |
 | `log_level` | `info` | 桥接节点和示例驱动的日志级别 |
-| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper 机械臂、示教器 CAN 端口 |
-| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero 机械臂 CAN 端口 |
-| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero 示教器 CAN 端口 |
+| `arm_port`, `port_name` | `right_arm`, `right_uma` | Piper / Piper X 单臂机械臂、示教器 CAN 端口 |
+| `left_arm_port`, `right_arm_port` | `left_arm`, `right_arm` | Nero / Piper X 双臂机械臂 CAN 端口 |
+| `left_port_name`, `right_port_name` | `left_uma`, `right_uma` | Nero / Piper X 双臂示教器 CAN 端口 |
 
 </details>
 
@@ -712,7 +742,7 @@ ros2 launch arm_safety_monitor safety_monitor.launch.py \
 
 `box_resize_step` 控制 Box 菜单的尺寸调整步长，默认 0.05 m。`plane_size` 默认 0.8 m，只控制墙面的显示尺寸；实际约束是无限平面。
 
-约束保护范围限于 `protected_frames` 指定的坐标系原点。若 profile 使用 `tool0` 且未生成 `ee`，创建对象后需将默认的 `protected_frames: [ee]` 改为实际坐标系。
+约束只保护 `protected_frames` 中列出的坐标系原点。若 profile 使用 `tool0` 且未生成 `ee`，创建对象后需将默认的 `protected_frames: [ee]` 改为实际坐标系。
 
 </details>
 
@@ -780,3 +810,13 @@ ros2 launch arm_safety_monitor safety_monitor.launch.py \
 真机调试的速度限制和停止机制由机械臂驱动及硬件提供。
 
 </details>
+
+<a id="验证"></a>
+## 验证
+
+按改动范围执行对应检查，并在交付说明中写明结果：
+
+1. 文档、配置或 profile 改动：运行 `git diff --check -- README.md CHANGELOG.md arm_adaptance_guide.md`，检查 Markdown 代码块、链接、YAML 示例和命令是否完整。
+2. 构建脚本或依赖改动：从 `~/uma` 运行 `bash src/UMA_Control/build.sh`，选择“完整构建”或“重新构建”，确认工作空间构建和启动校验通过。
+3. 启动文件或 ROS 接口改动：按[运动与通信检查](#运动与通信检查)检查话题、服务和启动日志，确认虚拟目标可达。
+4. 真机控制改动：确认急停可用，设置硬件低速，再测试平移、旋转、回零、夹爪和反馈超时。
