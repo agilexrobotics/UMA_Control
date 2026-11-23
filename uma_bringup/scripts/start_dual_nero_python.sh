@@ -55,23 +55,22 @@ export PYTHONPATH="${WORKSPACE_DIR}/src/UMA_SDK/python${PYTHONPATH:+:${PYTHONPAT
 
 cd "${WORKSPACE_DIR}"
 
-# 启动前清理上次遗留的栈进程(Ctrl+C 可能残留孤儿进程,重复节点会导致遥操抖动)
-for pat in "agx_arm_ctrl_single" "teleop_single_arm_node" "uma_ros_node" "uma_ros_py_node"; do
-  pkill -f "${pat}" 2>/dev/null || true
-done
+# Do not terminate drivers belonging to another launch session.  In particular,
+# a leftover driver must be dealt with before opening the same arm CAN again.
+if RUNNING_DRIVERS="$(pgrep -af '[a]gx_arm_ctrl/lib/agx_arm_ctrl/agx_arm_ctrl_single([[:space:]]|$)')"; then
+  echo "检测到已运行的 AGX 机械臂驱动，拒绝重复启动：" >&2
+  echo "${RUNNING_DRIVERS}" >&2
+  echo "请先按设备规范安全停机并清理旧启动会话，然后重试。" >&2
+  exit 1
+else
+  PSEARCH_RC=$?
+  if [[ "${PSEARCH_RC}" -ne 1 ]]; then
+    echo "无法检查已有 AGX 驱动，取消启动（pgrep 返回 ${PSEARCH_RC}）。" >&2
+    exit "${PSEARCH_RC}"
+  fi
+fi
 
-set +e
-ros2 launch uma_bringup "${LAUNCH_FILE}" "${EXTRA_LAUNCH_ARGS[@]}" "$@" &
-LAUNCH_PID=$!
-cleanup() {
-  kill "${LAUNCH_PID}" 2>/dev/null
-  for pat in "teleop_single_arm_node" "uma_ros_node" "uma_ros_py_node"; do
-    pkill -f "${pat}" 2>/dev/null || true
-  done
-}
-trap 'cleanup; exit 130' INT TERM
-wait "${LAUNCH_PID}"
-LAUNCH_RC=$?
-trap - INT TERM
-cleanup
-exit "${LAUNCH_RC}"
+# Keep launch in the foreground and replace this shell.  Ctrl+C then reaches
+# ROS launch as SIGINT, allowing it to stop, wait for, and reap its own children.
+# Sending SIGTERM to launch or exiting a background wrapper can orphan them.
+exec ros2 launch uma_bringup "${LAUNCH_FILE}" "${EXTRA_LAUNCH_ARGS[@]}" "$@"

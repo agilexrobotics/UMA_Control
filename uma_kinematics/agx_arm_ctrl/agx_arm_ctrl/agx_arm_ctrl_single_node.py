@@ -8,6 +8,8 @@ import threading
 from typing import Optional, Tuple
 from pyAgxArm import create_agx_arm_config, AgxArmFactory
 from rclpy.node import Node
+from rclpy.exceptions import ROSInterruptException
+from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import JointState
 from builtin_interfaces.msg import Time
 from std_srvs.srv import SetBool, Empty
@@ -69,35 +71,87 @@ class AgxArmRosNode(Node):
     def __init__(self):
         super().__init__("agx_arm_ctrl_single_node")
 
-        ### ros parameters
-        self._declare_parameters()
-        self._load_parameters()
-        self._log_parameters()
+        self._shutdown_lock = threading.Lock()
+        self._shutdown_started = False
+        self._publisher_stop = threading.Event()
+        self._publisher_rate = None
+        self.publisher_thread = None
+        self.agx_arm = None
 
-        ### AgxArmFactory
-        self._init_agx_arm()
+        # Construction can be interrupted after CAN has already been opened.
+        # Release partially initialized resources before propagating the error.
+        try:
+            ### ros parameters
+            self._declare_parameters()
+            self._load_parameters()
+            self._log_parameters()
 
-        ### effector
-        started = time.monotonic()
-        self.get_logger().info("Initializing effector")
-        self._init_effector()
-        self.get_logger().info(f"Effector ready in {time.monotonic() - started:.3f}s")
+            ### AgxArmFactory
+            self._init_agx_arm()
 
-        ### variables
-        self.enable_flag = False
+            ### effector
+            started = time.monotonic()
+            self.get_logger().info("Initializing effector")
+            self._init_effector()
+            self.get_logger().info(f"Effector ready in {time.monotonic() - started:.3f}s")
 
-        ### publishers
-        self._setup_publishers()
+            ### variables
+            self.enable_flag = False
 
-        ### subscribers
-        self._setup_subscribers()
+            ### publishers
+            self._setup_publishers()
 
-        ### services
-        self._setup_services()
+            ### subscribers
+            self._setup_subscribers()
 
-        ### publisher thread
-        self.publisher_thread = threading.Thread(target=self._publish_thread)
-        self.publisher_thread.start()
+            ### services
+            self._setup_services()
+
+            self._publisher_rate = self.create_rate(self.pub_rate)
+            self.publisher_thread = threading.Thread(
+                target=self._publish_thread,
+                name="agx-arm-feedback",
+                daemon=True,
+            )
+            self.publisher_thread.start()
+        except BaseException:
+            self.destroy_node()
+            raise
+
+    def destroy_node(self):
+        """Stop feedback and close CAN before releasing ROS entities.
+
+        This releases communication only: shutdown must not unexpectedly home
+        the arm or disable motors supporting a payload.
+        """
+        with self._shutdown_lock:
+            if self._shutdown_started:
+                return
+            self._shutdown_started = True
+
+            self._publisher_stop.set()
+            if self._publisher_rate is not None:
+                try:
+                    # Rate.sleep can otherwise wait forever once spin has ended.
+                    self.destroy_rate(self._publisher_rate)
+                except Exception as exc:
+                    print(f"Failed to destroy feedback rate: {exc}")
+                self._publisher_rate = None
+
+            thread = self.publisher_thread
+            if thread is not None and thread is not threading.current_thread():
+                if thread.is_alive():
+                    thread.join(timeout=2.0)
+                    if thread.is_alive():
+                        print("Feedback thread did not stop within 2 seconds")
+
+            try:
+                if self.agx_arm is not None:
+                    self.agx_arm.disconnect()
+            except Exception as exc:
+                print(f"Failed to disconnect arm SDK: {exc}")
+            finally:
+                super().destroy_node()
 
     ### initialization methods
     def _declare_parameters(self):
@@ -363,6 +417,8 @@ class AgxArmRosNode(Node):
             time.sleep(poll_interval)
 
     def _enable_arm(self, enable: bool = True, timeout: float = 5.0) -> bool:
+        if self._publisher_stop.is_set():
+            return False
         start_time = time.monotonic()
         action_name = "enable" if enable else "disable"
         self.get_logger().info(f"Requesting arm {action_name} (timeout={timeout:.1f}s)")
@@ -376,6 +432,8 @@ class AgxArmRosNode(Node):
         request(255)
         last_request = time.monotonic()
         while not reached():
+            if self._publisher_stop.is_set():
+                return False
             if time.monotonic() - start_time > timeout:
                 self.get_logger().error(
                     f"Timeout waiting for arm to {action_name} after {timeout} seconds"
@@ -384,8 +442,11 @@ class AgxArmRosNode(Node):
             if time.monotonic() - last_request >= 1.0:
                 request(255)
                 last_request = time.monotonic()
-            time.sleep(0.02)
+            if self._publisher_stop.wait(0.02):
+                return False
 
+        if self._publisher_stop.is_set():
+            return False
         joints_status = self.agx_arm.get_joint_enable_status(255)
         all_joints_in_target_status = joints_status if enable else not joints_status
 
@@ -404,21 +465,26 @@ class AgxArmRosNode(Node):
 
     ### publisher thread
     def _publish_thread(self):
-        rate = self.create_rate(self.pub_rate)
+        rate = self._publisher_rate
+        try:
+            if not self._publisher_stop.is_set() and rclpy.ok() and self.auto_enable:
+                if not self._enable_arm(True, self.enable_timeout):
+                    if not self._publisher_stop.is_set() and rclpy.ok():
+                        self.get_logger().error("Failed to auto-enable the arm")
 
-        if rclpy.ok() and self.auto_enable:
-            if not self._enable_arm(True, self.enable_timeout):
-                self.get_logger().error("Failed to auto-enable the arm")
-
-        # publishing loop
-        while rclpy.ok():
-            if self.agx_arm.is_ok():
-                self._publish_joint_states()
-                self._publish_pose()
-                self._publish_arm_status()
-                self._publish_effector_status()
-                self._publish_leader_joint_angles()
-            rate.sleep()
+            while not self._publisher_stop.is_set() and rclpy.ok():
+                if self.agx_arm.is_ok():
+                    self._publish_joint_states()
+                    self._publish_pose()
+                    self._publish_arm_status()
+                    self._publish_effector_status()
+                    self._publish_leader_joint_angles()
+                rate.sleep()
+        except (ROSInterruptException, RuntimeError):
+            # Context shutdown or explicit Rate destruction wakes the sleeper.
+            # Unexpected runtime failures during normal operation remain visible.
+            if not self._publisher_stop.is_set() and rclpy.ok():
+                raise
 
     ### publish methods
     def _get_gripper_joint_data(self):
@@ -943,16 +1009,22 @@ class AgxArmRosNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
+    node = None
 
     try:
         node = AgxArmRosNode()
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     except Exception as e:
         print(f"Error occurred: {e}")
     finally:
-        rclpy.shutdown()
+        try:
+            if node is not None:
+                node.destroy_node()
+        finally:
+            # Signal handlers may have shut the context down already.
+            rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
