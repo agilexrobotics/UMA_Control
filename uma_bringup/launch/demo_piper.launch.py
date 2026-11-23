@@ -104,7 +104,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "arm_type",
                 default_value="piper",
-                choices=["piper", "piper_x"],
+                choices=["piper", "piper_x", "piper_l", "piper_h"],
                 description="Single-arm model; selects the driver and default profile.",
             ),
             DeclareLaunchArgument(

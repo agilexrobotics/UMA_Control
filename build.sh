@@ -513,7 +513,7 @@ next_steps() {
   printf -v command 'bash %q' "${CONTROL_DIR}/uma_bringup/scripts/can_config.sh"
   say "   $command"
   say "3. 按型号选择一个启动命令："
-  for model in single_piper single_piper_x dual_nero; do
+  for model in single_piper single_piper_x single_piper_l single_piper_h dual_nero; do
     printf -v command 'CONDA_BASE=%q CONDA_ENV=%q WORKSPACE_DIR=%q bash %q' \
       "$CONDA_BASE" "$CONDA_ENV" "$WORKSPACE_DIR" \
       "${CONTROL_DIR}/uma_bringup/scripts/start_${model}_${suffix}.sh"

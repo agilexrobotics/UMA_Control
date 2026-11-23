@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 Piper L、Piper H 的 UMA 遥操适配，提供独立 profile、单臂/双臂 C++ 和 Python 启动脚本，复用 Piper X 的双臂路由及共享采集控制逻辑；修正导入 URDF/Xacro 的包资源路径，并增加离线回归测试。
 - 新增 Piper X 双臂正装启动入口。左右机械臂分别使用 `left_arm`、`right_arm`，示教器分别使用 `left_uma`、`right_uma`，两侧共用一个采集控制节点。
 - 新增 Ubuntu 24.04 原生 Jazzy 和 Python 3.12 支持。构建与启动脚本根据系统版本选择 ROS 和 Python，检查工作区平台与 Python 版本，并为 Nero、Piper、Piper X 提供 C++、Python 启动入口。
 - 新增 Piper X 单臂遥操支持，包括 profile、URDF、网格文件和 C++、Python 启动脚本。`demo_piper.launch.py` 接受 `arm_type:=piper_x`，自动选择 Piper X 驱动型号和默认 profile。
