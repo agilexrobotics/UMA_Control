@@ -266,6 +266,8 @@ See the [Arm Adaptation Guide](arm_adaptance_guide.md) for complete profile and 
 
 An external driver must publish `/feedback/joint_states_{side}` and subscribe to `/control/move_js_{side}`. Joint values use radians. Joint naming, direction, zero offsets, enabling, grippers, and vendor transport belong to the driver.
 
+For non-Piper/Nero arms, see the [Third-party Arm Teleoperation Topic and Driver Adaptation Guide](doc/third_party_arm_teleop_topic_guide.md) for feedback/control topic connections, vendor-driver adaptation and URDF/profile setup.
+
 Fresh joint feedback is required before teleoperation starts. A feedback timeout stops the session and clears its installation mapping. See [handle controls](#handle-controls-en) for toggling teleoperation and homing.
 
 Both outer keys control one shared recording request. Both C++ and Python bridges publish toggle events to one `recording_control` node, which publishes `/recording/requested`. The web collector subscribes to that flag and starts or stops its collection launch. It can correct the request through `/recording/set_requested` if collection fails.
@@ -676,6 +678,8 @@ Piper 控制器还使用 `installation_pos` 设置重力补偿方向。
 | `/recording/set_requested` | `std_srvs/srv/SetBool` | Web 采集端设置或清除全局采集请求 |
 
 自有驱动至少需要发布 `/feedback/joint_states_{side}`，并订阅 `/control/move_js_{side}`。关节单位为 rad。关节名称、方向、零位、使能、夹爪和厂商通信由驱动负责。
+
+接入非 Piper/Nero 的第三方机械臂时，请参见[第三方机械臂遥操话题与驱动适配指南](doc/third_party_arm_teleop_topic_guide.md)，了解反馈/控制话题对接、厂商驱动适配及 URDF/profile 配置。
 
 开启遥操前必须收到未超时的关节反馈。反馈超时后，节点停止本次遥操并清除安装映射。切换遥操和回零的操作见[按键控制表](#handle-controls-zh)。
 
